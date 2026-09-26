@@ -12,3 +12,4 @@ worker-configuration.d.ts
 .wrangler/
 .dev.vars
 .preview/
+.claude/settings.local.json
