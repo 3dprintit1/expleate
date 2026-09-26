@@ -1,12 +1,15 @@
 import type { Config } from '../config.js';
+import type { CharterReader } from '../core/reader.js';
 import type { Sql } from '../store/sql.js';
 
-/** Everything a service needs. Tests pass their own clock and randomness. */
+/** Everything a service needs. Tests pass their own clock, randomness and reader. */
 export interface Context {
   readonly sql: Sql;
   readonly config: Config;
   now(): Date;
   randomInt(maxExclusive: number): number;
+  /** The charter reader, when it is switched on. Without it only the word check runs. */
+  readonly reader?: CharterReader | undefined;
 }
 
 /**

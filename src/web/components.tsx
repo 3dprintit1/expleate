@@ -1,8 +1,9 @@
 import type { Context as HonoContext } from 'hono';
 import { raw } from 'hono/html';
 import type { Child, FC, PropsWithChildren } from 'hono/jsx';
-import type { Spirit } from '../core/charter.js';
+import { type Spirit, ruleById } from '../core/charter.js';
 import { toDecimalString } from '../core/money.js';
+import type { ReaderConcern } from '../core/reader.js';
 import type { Context } from '../services/context.js';
 import { getGroup } from '../services/groups.js';
 import { type Project, type ProjectStatus, getMember } from '../services/records.js';
@@ -115,6 +116,7 @@ const Layout: FC<PropsWithChildren<{ c: HonoContext<AppEnv>; title: string }>> =
             <a href="/charter">The charter</a>
             <a href="/costs">Running costs</a>
             <a href="/circles">Circles</a>
+            <a href="/reader">The charter reader</a>
             <a href={config.sourceUrl}>Source code</a>
           </nav>
           <p>Nobody profits here. Running costs are shared at cost, in the open. Amounts are in {config.currency.code}.</p>
@@ -336,3 +338,20 @@ export const ErrorSummary: FC<{ message: string | undefined }> = ({ message }) =
   ) : null;
 
 export const Hint: FC<PropsWithChildren> = ({ children }) => <span class="hint">{children}</span>;
+
+/** What the charter reader noticed, in its own words, with the rule each concern is about. */
+export const ReaderConcerns: FC<{ reading: { summary: string; concerns: readonly ReaderConcern[] } }> = ({ reading }) => (
+  <>
+    <p>{reading.summary}</p>
+    {reading.concerns.length > 0 && (
+      <ul>
+        {reading.concerns.map((concern) => (
+          <li>
+            <strong>{ruleById(concern.rule)?.title}.</strong> {concern.quote && <>“{concern.quote}”: </>}
+            {concern.reason}
+          </li>
+        ))}
+      </ul>
+    )}
+  </>
+);

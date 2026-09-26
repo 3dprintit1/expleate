@@ -4,9 +4,14 @@
  * use each other without circular imports.
  */
 import type { Concern, Spirit } from '../core/charter.js';
+import { newId } from '../core/crypto.js';
 import type { Pool, Portion } from '../core/pool.js';
 import { toStored } from '../core/money.js';
+import type { ReaderConcern, ReaderVerdict, Reading } from '../core/reader.js';
 import { type Context, Problem, nowIso } from './context.js';
+
+/** The charter reader's own member record, which holds its flags. */
+export const READER_ID = 'charter-reader';
 
 export interface Member {
   readonly id: string;
@@ -28,9 +33,10 @@ export function requireMember(ctx: Context, id: string): Member {
   return member;
 }
 
+/** Finds a person by their handle. The charter reader is not a person, so it is never found this way. */
 export function getMemberByHandle(ctx: Context, handle: string): Member | undefined {
   return ctx.sql.get<Member>(
-    `SELECT ${MEMBER_COLUMNS} FROM members WHERE handle = ?`,
+    `SELECT ${MEMBER_COLUMNS} FROM members WHERE handle = ? AND kind = 'person'`,
     handle.trim().replace(/^@/, '').toLowerCase(),
   );
 }
@@ -201,4 +207,57 @@ export function changeBalance(ctx: Context, memberId: string, delta: bigint): bi
   if (next < 0n) throw new Problem('You do not have enough resources for that.', 400, 'amount');
   ctx.sql.run('UPDATE members SET balance = ? WHERE id = ?', toStored(next), memberId);
   return next;
+}
+
+export type ReaderSubjectKind = 'proposal' | 'news' | 'use';
+
+export interface ReaderNote {
+  readonly id: string;
+  readonly project_id: string;
+  readonly subject: ReaderSubjectKind;
+  /** The news or the ledger entry the note is about. */
+  readonly subject_id: string | null;
+  readonly verdict: ReaderVerdict;
+  readonly summary: string;
+  readonly concerns: readonly ReaderConcern[];
+  readonly model: string;
+  readonly created_at: string;
+}
+
+/** Keeps what the charter reader made of something, including when it found nothing wrong. */
+export function saveReaderNote(
+  ctx: Context,
+  projectId: string,
+  subject: ReaderSubjectKind,
+  subjectId: string | null,
+  reading: Reading,
+): void {
+  ctx.sql.run(
+    `INSERT INTO reader_notes (id, project_id, subject, subject_id, verdict, summary, concerns, model, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    newId(),
+    projectId,
+    subject,
+    subjectId,
+    reading.verdict,
+    reading.summary,
+    JSON.stringify(reading.concerns),
+    reading.model,
+    nowIso(ctx),
+  );
+}
+
+/** What the charter reader noticed about a project, newest first. Notes that found nothing wrong are left out. */
+export function readerConcerns(ctx: Context, projectId: string): ReaderNote[] {
+  return ctx.sql
+    .all<Omit<ReaderNote, 'concerns'> & { concerns: string }>(
+      "SELECT * FROM reader_notes WHERE project_id = ? AND verdict != 'fits' ORDER BY created_at DESC, id",
+      projectId,
+    )
+    .map((row) => ({ ...row, concerns: JSON.parse(row.concerns) as ReaderConcern[] }));
+}
+
+/** True once the charter reader has read what a project's proposer wrote. */
+export function proposalWasRead(ctx: Context, projectId: string): boolean {
+  return ctx.sql.get("SELECT 1 FROM reader_notes WHERE project_id = ? AND subject = 'proposal'", projectId) !== undefined;
 }

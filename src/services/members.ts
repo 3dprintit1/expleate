@@ -126,7 +126,7 @@ interface MemberWithPassword extends Member {
 
 function memberWithPassword(ctx: Context, handleInput: string): MemberWithPassword | undefined {
   return ctx.sql.get<MemberWithPassword>(
-    'SELECT id, handle, name, balance, created_at, password_hash FROM members WHERE handle = ?',
+    "SELECT id, handle, name, balance, created_at, password_hash FROM members WHERE handle = ? AND kind = 'person'",
     normaliseHandle(handleInput),
   );
 }

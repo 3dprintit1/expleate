@@ -51,6 +51,27 @@ When Cloudflare or the registrar charges you, record it on the costs page with t
 
 On the first of each month the daily job shares whatever is still owed across all live pools, never more than 2% of everything pooled in one go. Caretakers can also share sooner with the button on the costs page.
 
+## Switch on the charter reader
+
+The [charter reader](https://expleat.ing/reader) is an AI that reads every proposal, piece of news and use against the charter, and asks people to take a second look when something seems wrong. It runs on Claude, through Anthropic's API, and stays off until it has a key. Without it, only the word check runs.
+
+1. At [console.anthropic.com](https://console.anthropic.com), create an account, add credit, and create an API key. You can set a monthly spending limit there too.
+2. Store the key as a secret, so it never appears in the code or in the settings below:
+
+   ```sh
+   npx wrangler secret put ANTHROPIC_API_KEY
+   ```
+
+The next request picks it up. The reader's page stops saying it is switched off.
+
+**What it costs.** Each reading sends the reader's instructions (about a page, cached, so after the first reading they cost a tenth as much) and the text to read, and gets a short answer back. At Claude Opus 5's prices, $5 per million tokens in and $25 per million out, that comes to roughly 1 to 5 US cents a reading. Ten readings a day is somewhere between $3 and $15 a month. Anthropic bills you, and the bill goes on the costs page like any other.
+
+Two settings cap it: `READER_DAILY_READS`, the most readings a day for everyone together, and `READER_READS_PER_PERSON`, the most any one person's writing can take up. When the daily total runs out, the word check runs alone and the reader catches up on unread projects in the daily round. Someone who reaches their own limit is asked to suggest their project tomorrow, so nobody can wear the reader out to slip a proposal past it.
+
+**Seeing every request.** To log each reading and its cost in Cloudflare's dashboard, create an [AI Gateway](https://developers.cloudflare.com/ai-gateway/) and put its Anthropic address in `ANTHROPIC_BASE_URL`.
+
+**Fallbacks.** Claude's safety checks occasionally decline to read something. When that happens, Anthropic's servers pass the request to another Claude model that they choose. If every model declines, the reader asks people to take a look, and the proposal goes to a circle.
+
 ## While Expleate is a prototype
 
 `DEMO_RESOURCES` is `"true"`, so people add pretend resources with a button and a banner says so on every page. The cost shares are pretend too, and the real bills are paid by the founder's gift. Set it to `"false"` only once real money is connected: see [the roadmap](roadmap.md).
@@ -69,6 +90,12 @@ All in the `vars` section of `wrangler.jsonc`:
 | `FLAG_THRESHOLD` | Different people who must flag a project before a circle is drawn | `3` |
 | `REVIEW_DAYS` | How long a circle has to decide | `7` |
 | `MAX_COST_SHARE_PPM` | Most one running-cost share may take, in parts per million | `20000` (2%) |
+| `READER_MODEL` | The Claude model the charter reader uses | `claude-opus-5` |
+| `READER_DAILY_READS` | Most readings a day, for everyone together | `200` |
+| `READER_READS_PER_PERSON` | Most readings a day for one person's writing | `20` |
+| `ANTHROPIC_BASE_URL` | Another address for Anthropic's API, such as an AI Gateway | Anthropic's own |
+
+`ANTHROPIC_API_KEY` is a secret, set with `npx wrangler secret put`, never in `wrangler.jsonc`.
 
 ## Looking after it
 

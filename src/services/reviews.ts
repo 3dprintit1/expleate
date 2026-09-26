@@ -9,7 +9,16 @@ import { type Tally, type Verdict, decision, decisionAtDeadline, drawCircle, isV
 import { newId } from '../core/crypto.js';
 import { type Context, Problem, addDays, cleanText, nowIso } from './context.js';
 import { settlePool } from './pools.js';
-import { type Project, isHost, queryProjects, requireProject, hostIds } from './records.js';
+import {
+  READER_ID,
+  type Project,
+  type ReaderNote,
+  hostIds,
+  isHost,
+  queryProjects,
+  readerConcerns,
+  requireProject,
+} from './records.js';
 
 /** How long people who flagged a project wait before flagging it again, once a circle has found it fits. */
 export const FLAG_AGAIN_DAYS = 30;
@@ -36,9 +45,10 @@ function requireReview(ctx: Context, id: string): Review {
 }
 
 /**
- * Everyone who could sit in this circle: any member except the project's
+ * Everyone who could sit in this circle: any person except the project's
  * hosts, people who have had a portion in its pool, people who flagged it,
- * and anyone already seated.
+ * and anyone already seated. The charter reader is not a person, so it is
+ * never drawn.
  */
 function eligibleMembers(ctx: Context, reviewId: string, project: Project): string[] {
   const excluded = new Set(hostIds(ctx, project));
@@ -47,7 +57,7 @@ function eligibleMembers(ctx: Context, reviewId: string, project: Project): stri
   add(ctx.sql.all('SELECT member_id FROM flags WHERE project_id = ? AND settled = 0', project.id));
   add(ctx.sql.all('SELECT member_id FROM seats WHERE review_id = ?', reviewId));
   return ctx.sql
-    .all<{ id: string }>('SELECT id FROM members ORDER BY id')
+    .all<{ id: string }>("SELECT id FROM members WHERE kind = 'person' ORDER BY id")
     .map((row) => row.id)
     .filter((id) => !excluded.has(id));
 }
@@ -95,6 +105,52 @@ export interface FlagResult {
   readonly circleDrawn: boolean;
 }
 
+/**
+ * When someone who flagged a project may flag it again, if they must wait.
+ * Once a circle has found that a project fits, the people who flagged it wait
+ * a while before flagging it again, so a few accounts cannot keep a project
+ * paused. Anyone else can still flag it.
+ */
+function flagAgainFrom(ctx: Context, projectId: string, memberId: string): Date | null {
+  const lastFits = ctx.sql.get<{ decided_at: string }>(
+    `SELECT r.decided_at FROM flags f JOIN reviews r ON r.id = f.review_id
+      WHERE f.project_id = ? AND f.member_id = ? AND r.outcome = 'fits'
+      ORDER BY r.decided_at DESC LIMIT 1`,
+    projectId,
+    memberId,
+  );
+  if (!lastFits) return null;
+  const again = addDays(new Date(lastFits.decided_at), FLAG_AGAIN_DAYS);
+  return again > ctx.now() ? again : null;
+}
+
+function hasOpenFlag(ctx: Context, projectId: string, memberId: string): boolean {
+  return ctx.sql.get('SELECT 1 FROM flags WHERE project_id = ? AND member_id = ? AND settled = 0', projectId, memberId) !== undefined;
+}
+
+/**
+ * Adds a flag. Once enough flags are in, the project's pool pauses and a
+ * circle is drawn. Call inside a transaction.
+ */
+function addFlag(ctx: Context, project: Project, memberId: string, rule: RuleId, note: string): FlagResult {
+  ctx.sql.run(
+    'INSERT INTO flags (id, project_id, member_id, rule, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    newId(),
+    project.id,
+    memberId,
+    rule,
+    note,
+    nowIso(ctx),
+  );
+  const flags = ctx.sql.get<{ n: number }>('SELECT COUNT(*) AS n FROM flags WHERE project_id = ? AND settled = 0', project.id);
+  if ((flags?.n ?? 0) < ctx.config.flagThreshold) return { circleDrawn: false };
+
+  ctx.sql.run("UPDATE projects SET status = 'review' WHERE id = ?", project.id);
+  const reviewId = openReview(ctx, project, 'flags');
+  ctx.sql.run('UPDATE flags SET review_id = ? WHERE project_id = ? AND settled = 0', reviewId, project.id);
+  return { circleDrawn: true };
+}
+
 export function flagProject(ctx: Context, projectId: string, memberId: string, rule: string, note: string): FlagResult {
   if (!isRuleId(rule)) throw new Problem('Choose which part of the charter you think it breaks.', 400, 'rule');
   const why = cleanText(note, { label: 'Your reason', field: 'note', min: 10, max: 1000 });
@@ -108,49 +164,28 @@ export function flagProject(ctx: Context, projectId: string, memberId: string, r
     if (isHost(ctx, project, memberId)) {
       throw new Problem("You host this project, so you can't flag it.", 403);
     }
-    if (ctx.sql.get('SELECT 1 FROM flags WHERE project_id = ? AND member_id = ? AND settled = 0', projectId, memberId)) {
-      throw new Problem('You have already flagged this project.', 409);
+    if (hasOpenFlag(ctx, projectId, memberId)) throw new Problem('You have already flagged this project.', 409);
+    const again = flagAgainFrom(ctx, projectId, memberId);
+    if (again) {
+      throw new Problem(
+        `A circle found this project fits after you flagged it. You can flag it again from ${again.toISOString().slice(0, 10)}.`,
+        409,
+      );
     }
-    // Once a circle has found that a project fits, the people who flagged it
-    // wait a while before flagging it again, so a few accounts cannot keep a
-    // project paused. Anyone else can still flag it.
-    const lastFits = ctx.sql.get<{ decided_at: string }>(
-      `SELECT r.decided_at FROM flags f JOIN reviews r ON r.id = f.review_id
-        WHERE f.project_id = ? AND f.member_id = ? AND r.outcome = 'fits'
-        ORDER BY r.decided_at DESC LIMIT 1`,
-      projectId,
-      memberId,
-    );
-    if (lastFits) {
-      const again = addDays(new Date(lastFits.decided_at), FLAG_AGAIN_DAYS);
-      if (again > ctx.now()) {
-        throw new Problem(
-          `A circle found this project fits after you flagged it. You can flag it again from ${again.toISOString().slice(0, 10)}.`,
-          409,
-        );
-      }
-    }
-    ctx.sql.run(
-      'INSERT INTO flags (id, project_id, member_id, rule, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      newId(),
-      projectId,
-      memberId,
-      rule,
-      why,
-      nowIso(ctx),
-    );
-
-    const flags = ctx.sql.get<{ n: number }>(
-      'SELECT COUNT(*) AS n FROM flags WHERE project_id = ? AND settled = 0',
-      projectId,
-    );
-    if ((flags?.n ?? 0) < ctx.config.flagThreshold) return { circleDrawn: false };
-
-    ctx.sql.run("UPDATE projects SET status = 'review' WHERE id = ?", projectId);
-    const reviewId = openReview(ctx, project, 'flags');
-    ctx.sql.run('UPDATE flags SET review_id = ? WHERE project_id = ? AND settled = 0', reviewId, projectId);
-    return { circleDrawn: true };
+    return addFlag(ctx, project, memberId, rule, why);
   });
+}
+
+/**
+ * The charter reader flags a project, as one flag among people's. It holds
+ * at most one open flag on a project, and once a circle has found the project
+ * fits, it waits like anyone else before flagging it again. Returns null when
+ * it did not flag. Call inside a transaction.
+ */
+export function readerFlag(ctx: Context, project: Project, rule: RuleId, note: string): FlagResult | null {
+  if (project.status !== 'open') return null;
+  if (hasOpenFlag(ctx, project.id, READER_ID) || flagAgainFrom(ctx, project.id, READER_ID)) return null;
+  return addFlag(ctx, project, READER_ID, rule, [...note].slice(0, 1000).join(''));
 }
 
 export function tallyOf(ctx: Context, reviewId: string): Tally {
@@ -280,7 +315,12 @@ export function openSeatsFor(ctx: Context, memberId: string): Seat[] {
 export interface ReviewView {
   readonly review: Review;
   readonly project: Project;
+  /** Flags from people, which never say who flagged. */
   readonly flags: Array<{ rule: RuleId; note: string; created_at: string }>;
+  /** True when the charter reader's flag is among the flags that brought the circle together. */
+  readonly readerFlagged: boolean;
+  /** What the charter reader noticed about the project, newest first. */
+  readonly readerNotes: readonly ReaderNote[];
   readonly tally: Tally;
   /** The viewer's own seat, if they were drawn. */
   readonly seat: { vote: Verdict | null } | null;
@@ -292,9 +332,12 @@ export function reviewView(ctx: Context, reviewId: string, viewerId: string | un
   const review = requireReview(ctx, reviewId);
   const project = requireProject(ctx, review.project_id);
   const flags = ctx.sql.all<{ rule: RuleId; note: string; created_at: string }>(
-    'SELECT rule, note, created_at FROM flags WHERE review_id = ? ORDER BY created_at',
+    'SELECT rule, note, created_at FROM flags WHERE review_id = ? AND member_id != ? ORDER BY created_at',
     reviewId,
+    READER_ID,
   );
+  const readerFlagged =
+    ctx.sql.get('SELECT 1 FROM flags WHERE review_id = ? AND member_id = ?', reviewId, READER_ID) !== undefined;
   const seat = viewerId
     ? ctx.sql.get<{ vote: Verdict | null }>(
         'SELECT vote FROM seats WHERE review_id = ? AND member_id = ?',
@@ -309,7 +352,10 @@ export function reviewView(ctx: Context, reviewId: string, viewerId: string | un
           reviewId,
         )
       : [];
-  return { review, project, flags, tally: tallyOf(ctx, reviewId), seat, notes };
+  // Only what the reader had noticed by the time the circle met or decided.
+  const until = review.decided_at ?? nowIso(ctx);
+  const readerNotes = readerConcerns(ctx, project.id).filter((note) => note.created_at <= until);
+  return { review, project, flags, readerFlagged, readerNotes, tally: tallyOf(ctx, reviewId), seat, notes };
 }
 
 export function reviewsForProject(ctx: Context, projectId: string): Review[] {

@@ -12,11 +12,12 @@ A platform where anyone can suggest a project of creativity, adventure or joy, a
 
 ## Layout
 
-- `src/core`: pure rules (pool.ts pooling maths, charter.ts check, circle.ts, costs.ts, money.ts, crypto.ts). No storage or web code.
+- `src/core`: pure rules (pool.ts pooling maths, charter.ts check, reader.ts the charter reader's instructions and answer checks, circle.ts, costs.ts, money.ts, crypto.ts). No storage or web code.
+- `src/ai/claude-reader.ts`: the charter reader on Claude, through the official Anthropic SDK. The only file that talks to a model.
 - `src/store`: synchronous `Sql` interface with node:sqlite and Durable Object adapters, and migrations in schema.ts.
-- `src/services`: one function per action, each in a transaction. records.ts holds shared reads and writes.
+- `src/services`: one function per action, each in a transaction. records.ts holds shared reads and writes. reader.ts wraps the actions the charter reader reads first (suggesting, news, uses).
 - `src/web`: Hono app with server-rendered JSX, forms protected by a double-submit token and an Origin check, read-only JSON API under /api.
-- `src/node.ts` and `src/worker.ts`: the two entry points. The Worker sends every request to one Durable Object, the Commons, and does the slow password work at the edge first, passing results in the headers listed in `src/web/edge.ts`. Nothing slow may run inside the Commons: it serves everyone, one request at a time.
+- `src/node.ts` and `src/worker.ts`: the two entry points. The Worker sends every request to one Durable Object, the Commons, and does the slow password work at the edge first, passing results in the headers listed in `src/web/edge.ts`. Nothing that keeps the processor busy may run inside the Commons: it serves everyone. Waiting on the network is fine, as the Commons serves other requests meanwhile, so the charter reader is awaited first and everything it affects is read and written afterwards, in one transaction.
 - docs/how-it-runs.md explains the design, how it grows, and what is still missing.
 
 ## Rules that must hold
@@ -26,6 +27,7 @@ A platform where anyone can suggest a project of creativity, adventure or joy, a
 - No `await` between a database read and the write that depends on it (Cloudflare would let another request in between).
 - Amounts are integers in the smallest currency unit; bigint in core maths, stored as INTEGER, weights stored as TEXT.
 - Never show who put in how much. Take-back notes are for hosts only. Circle votes are anonymous.
+- The charter reader never decides. Its concerns send a proposal to a circle once the proposer has explained, or count as one flag. It is never drawn for a circle, and it is sent what people wrote, never who wrote it.
 - No JavaScript on pages and no third-party requests. The CSP forbids scripts and inline styles.
 
 ## Writing

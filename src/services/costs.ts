@@ -146,7 +146,7 @@ export function costsOverview(ctx: Context): CostsOverview {
   const handles = [...ctx.config.caretakers];
   const caretakers = handles.length
     ? ctx.sql.all<{ handle: string; name: string }>(
-        `SELECT handle, name FROM members WHERE handle IN (${handles.map(() => '?').join(', ')}) ORDER BY name`,
+        `SELECT handle, name FROM members WHERE kind = 'person' AND handle IN (${handles.map(() => '?').join(', ')}) ORDER BY name`,
         ...handles,
       )
     : [];

@@ -26,7 +26,7 @@ mkdirSync(dirname(path), { recursive: true });
 const sql = openNodeSql(path);
 migrate(sql);
 
-if (sql.get('SELECT 1 FROM members LIMIT 1')) {
+if (sql.get("SELECT 1 FROM members WHERE kind = 'person' LIMIT 1")) {
   console.log(`${path} already has people in it, so nothing was added. Delete it to start afresh.`);
   process.exit(0);
 }

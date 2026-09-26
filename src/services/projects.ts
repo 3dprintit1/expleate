@@ -1,10 +1,18 @@
 import { type Concern, type Spirit, isSpirit, screen } from '../core/charter.js';
 import { newId } from '../core/crypto.js';
 import { toStored } from '../core/money.js';
+import { type Reading, wantsALook } from '../core/reader.js';
 import { type Context, Problem, cleanLine, cleanText, nowIso } from './context.js';
 import { isGroupMember } from './groups.js';
 import { settlePool } from './pools.js';
-import { type Project, type ProjectStatus, queryProjects, requireProject, requireHost } from './records.js';
+import {
+  type Project,
+  type ProjectStatus,
+  queryProjects,
+  requireHost,
+  requireProject,
+  saveReaderNote,
+} from './records.js';
 import { openReview, withdrawReviews } from './reviews.js';
 
 export interface ProposalInput {
@@ -23,30 +31,60 @@ export interface ProposalInput {
 }
 
 export type ProposalResult =
-  | { readonly kind: 'concerns'; readonly concerns: readonly Concern[] }
+  | {
+      readonly kind: 'concerns';
+      /** What the word check found. */
+      readonly concerns: readonly Concern[];
+      /** What the charter reader made of it, if it read it. */
+      readonly reading: Reading | null;
+    }
   | { readonly kind: 'created'; readonly project: Project };
+
+/** A proposal tidied up and checked, ready to be read and saved. */
+export interface CleanProposal {
+  readonly title: string;
+  readonly summary: string;
+  readonly story: string;
+  readonly plans: string;
+  readonly spirits: readonly Spirit[];
+  readonly note: string;
+}
 
 // A prime just below 2^31: multiplying by a daily number modulo it reshuffles every day.
 const SHUFFLE_PRIME = 2_147_483_647;
 
-/**
- * Suggests a new project. If the charter check finds nothing, the pool opens
- * straight away. If it finds something, the proposer is asked to explain, and
- * with an explanation the project waits for a charter circle.
- */
-export function proposeProject(ctx: Context, memberId: string, input: ProposalInput): ProposalResult {
+/** Tidies a proposal and checks everything a person can fix, before anything else happens to it. */
+export function cleanProposal(input: ProposalInput): CleanProposal {
   const title = cleanLine(input.title, { label: 'A title', field: 'title', min: 3, max: 100 });
   const summary = cleanLine(input.summary, { label: 'A one-line summary', field: 'summary', min: 10, max: 200 });
   const story = cleanText(input.story, { label: 'The story', field: 'story', min: 50, max: 10_000 });
   const plans = cleanText(input.plans, { label: 'What the pool is for', field: 'plans', min: 20, max: 5_000 });
-  const spirits = [...new Set(input.spirits)].filter(isSpirit) as Spirit[];
+  const spirits = [...new Set(input.spirits)].filter(isSpirit);
   if (spirits.length === 0) throw new Problem('Choose at least one of creativity, adventure or joy.', 400, 'spirits');
   if (input.hope !== null && input.hope <= 0n) throw new Problem('What you hope to pool must be more than zero.', 400, 'hope');
   if (!input.agreed) throw new Problem('Please confirm that your project fits the charter.', 400, 'agreed');
   const note = cleanText(input.concernNote, { label: 'Your explanation', field: 'concernNote', min: 0, max: 2_000 });
+  return { title, summary, story, plans, spirits, note };
+}
+
+/**
+ * Suggests a new project. If neither the word check nor the charter reader
+ * finds anything, the pool opens straight away. If either does, the proposer
+ * is asked to explain, and with an explanation the project waits for a
+ * charter circle. `reading` is what the charter reader made of this exact
+ * proposal, or null if it did not read it.
+ */
+export function proposeProject(
+  ctx: Context,
+  memberId: string,
+  input: ProposalInput,
+  reading: Reading | null = null,
+): ProposalResult {
+  const { title, summary, story, plans, spirits, note } = cleanProposal(input);
 
   const concerns = screen({ title, summary, story, plans });
-  if (concerns.length > 0 && [...note].length < 20) return { kind: 'concerns', concerns };
+  const needsLook = concerns.length > 0 || wantsALook(reading);
+  if (needsLook && [...note].length < 20) return { kind: 'concerns', concerns, reading };
 
   return ctx.sql.transaction(() => {
     if (input.groupId && !isGroupMember(ctx, input.groupId, memberId)) {
@@ -54,7 +92,7 @@ export function proposeProject(ctx: Context, memberId: string, input: ProposalIn
     }
     const id = newId();
     const now = nowIso(ctx);
-    const status: ProjectStatus = concerns.length > 0 ? 'awaiting' : 'open';
+    const status: ProjectStatus = needsLook ? 'awaiting' : 'open';
     ctx.sql.run(
       `INSERT INTO projects (id, title, summary, story, plans, spirits, hope, proposer_id, group_id, status,
                              concerns, concern_note, shuffle_key, created_at, opened_at)
@@ -70,11 +108,12 @@ export function proposeProject(ctx: Context, memberId: string, input: ProposalIn
       input.groupId,
       status,
       JSON.stringify(concerns),
-      concerns.length > 0 ? note : '',
+      needsLook ? note : '',
       1 + ctx.randomInt(SHUFFLE_PRIME - 1),
       now,
       status === 'open' ? now : null,
     );
+    if (reading) saveReaderNote(ctx, id, 'proposal', null, reading);
     const project = requireProject(ctx, id);
     if (status === 'awaiting') openReview(ctx, project, 'proposal');
     return { kind: 'created', project };
@@ -158,23 +197,34 @@ export interface Update {
   readonly author_handle: string;
 }
 
-/** Hosts keep everyone in the pool up to date on where the project is heading. */
-export function postUpdate(ctx: Context, projectId: string, memberId: string, body: string): void {
-  const text = cleanText(body, { label: 'The update', field: 'body', min: 2, max: 5_000 });
-  ctx.sql.transaction(() => {
+export function cleanNews(body: string): string {
+  return cleanText(body, { label: 'The update', field: 'body', min: 2, max: 5_000 });
+}
+
+/** Checks that someone may share news on a project. */
+export function checkCanPostUpdate(ctx: Context, project: Project, memberId: string): void {
+  requireHost(ctx, project, memberId);
+  if (project.status === 'closed' || project.status === 'declined') {
+    throw new Problem('This project was closed by a charter circle.', 409);
+  }
+}
+
+/** Hosts keep everyone in the pool up to date on where the project is heading. Returns the news's id. */
+export function postUpdate(ctx: Context, projectId: string, memberId: string, body: string): string {
+  const text = cleanNews(body);
+  return ctx.sql.transaction(() => {
     const project = requireProject(ctx, projectId);
-    requireHost(ctx, project, memberId);
-    if (project.status === 'closed' || project.status === 'declined') {
-      throw new Problem('This project was closed by a charter circle.', 409);
-    }
+    checkCanPostUpdate(ctx, project, memberId);
+    const id = newId();
     ctx.sql.run(
       'INSERT INTO updates (id, project_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
-      newId(),
+      id,
       projectId,
       memberId,
       text,
       nowIso(ctx),
     );
+    return id;
   });
 }
 

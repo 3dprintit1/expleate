@@ -1,13 +1,22 @@
 import { Hono } from 'hono';
 import { RULES, ruleById } from '../../core/charter.js';
 import { castVote, projectsUnderReview, reviewView, reviewsForProject } from '../../services/reviews.js';
-import { Csrf, Paragraphs, STATUS_NAMES, page } from '../components.js';
+import { Csrf, Paragraphs, ReaderConcerns, STATUS_NAMES, page } from '../components.js';
 import type { AppEnv } from '../env.js';
 import { day, field, plural } from '../format.js';
 import { signedIn } from '../guards.js';
 import { flash } from '../session.js';
 
 export const circles = new Hono<AppEnv>();
+
+/** "2 people and the charter reader flagged it:", and so on. */
+function whoFlagged(people: number, reader: boolean): string {
+  const who = [people > 0 ? plural(people, 'person', 'people') : '', reader ? 'the charter reader' : '']
+    .filter(Boolean)
+    .join(' and ');
+  if (!who) return 'It was flagged.';
+  return `${who[0]!.toUpperCase()}${who.slice(1)} flagged it${people > 0 ? ':' : '.'}`;
+}
 
 circles.get('/circles', (c) => {
   const ctx = c.get('ctx');
@@ -69,14 +78,21 @@ circles.get('/circles/:id', (c) => {
       <h2>Why it met</h2>
       {review.reason === 'proposal' ? (
         <>
-          <p>The charter check noticed:</p>
-          <ul>
-            {project.concerns.map((concern) => (
-              <li>
-                <strong>“{concern.term}”</strong> in “{concern.excerpt}”
-              </li>
-            ))}
-          </ul>
+          {project.concerns.length > 0 && (
+            <>
+              <p>The word check noticed:</p>
+              <ul>
+                {project.concerns.map((concern) => (
+                  <li>
+                    <strong>“{concern.term}”</strong> in “{concern.excerpt}”
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {view.readerNotes.length === 0 && project.concerns.length === 0 && (
+            <p>The charter reader asked for a second look.</p>
+          )}
           <p>The person who suggested it says:</p>
           <blockquote>
             <Paragraphs text={project.concern_note} />
@@ -84,15 +100,35 @@ circles.get('/circles/:id', (c) => {
         </>
       ) : (
         <>
-          <p>{plural(view.flags.length, 'person', 'people')} flagged it:</p>
-          <ul>
-            {view.flags.map((flag) => (
-              <li>
-                <strong>{ruleById(flag.rule)?.title}.</strong> {flag.note}
-              </li>
-            ))}
-          </ul>
+          <p>{whoFlagged(view.flags.length, view.readerFlagged)}</p>
+          {view.flags.length > 0 && (
+            <ul>
+              {view.flags.map((flag) => (
+                <li>
+                  <strong>{ruleById(flag.rule)?.title}.</strong> {flag.note}
+                </li>
+              ))}
+            </ul>
+          )}
         </>
+      )}
+
+      {view.readerNotes.length > 0 && (
+        <details class="section glass" open>
+          <summary>What the charter reader noticed</summary>
+          {view.readerNotes.map((note) => (
+            <div class="reader-note">
+              <p class="faint">
+                {note.subject === 'proposal' ? 'The proposal' : note.subject === 'news' ? 'News' : 'A use of the pool'} ·{' '}
+                {day(config, note.created_at)}
+              </p>
+              <ReaderConcerns reading={note} />
+            </div>
+          ))}
+          <p class="faint">
+            The <a href="/reader">charter reader</a> is an AI. It can be wrong, and the circle decides.
+          </p>
+        </details>
       )}
 
       {review.status === 'open' ? (

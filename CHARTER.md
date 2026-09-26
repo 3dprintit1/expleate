@@ -70,9 +70,9 @@ Whoever suggests a project hosts it. When a group suggests one, everyone in the 
 
 ## When a project might break the charter
 
-When someone suggests a project, an automatic check looks for words that often mean a project is about politics, war, financial gain or charity. The check never turns anything down by itself. If it finds something, the proposer can reword the project, or explain why it still fits.
+Two checks read every project before it opens. A word check looks for words that often mean a project is about politics, war, financial gain or charity. The **charter reader**, an AI, reads the whole proposal and looks for anything that seems to break the charter. Neither check turns anything down. If either finds something, the proposer can reword the project, or explain why it still fits.
 
-Anyone can flag a project they think breaks the charter. Once three different people have flagged the same project, its pool pauses.
+Anyone can flag a project they think breaks the charter. The charter reader also reads every piece of news and every use, and can add one flag of its own. Once three flags are in, from three people or from two people and the reader, the project's pool pauses. The reader's instructions are public, word for word, on [its page](/reader).
 
 Either way, a **charter circle** is drawn: a handful of members picked at random, a bit like a jury. Nobody who hosts the project, has pooled into it or has flagged it can be drawn. Each person in the circle has one vote, and votes are anonymous.
 

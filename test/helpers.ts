@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import { configFromEnv, type Env } from '../src/config.js';
 import { newId } from '../src/core/crypto.js';
+import type { CharterReader, ReaderSubject, Reading } from '../src/core/reader.js';
 import type { Context } from '../src/services/context.js';
 import { addResources } from '../src/services/members.js';
 import type { Member } from '../src/services/records.js';
@@ -23,7 +24,7 @@ export interface TestContext extends Context {
   advanceDays(days: number): void;
 }
 
-export function testContext(env: Env = {}, seed = 1): TestContext {
+export function testContext(env: Env = {}, seed = 1, reader?: CharterReader): TestContext {
   const sql = openNodeSql(':memory:');
   migrate(sql);
   const random = seeded(seed);
@@ -33,11 +34,36 @@ export function testContext(env: Env = {}, seed = 1): TestContext {
     config: configFromEnv({ DEMO_RESOURCES: 'true', CURRENCY: 'USD', ...env }),
     now: () => now,
     randomInt: (max) => Math.floor(random() * max),
+    reader,
     advanceDays(days) {
       now = new Date(now.getTime() + days * 86_400_000);
     },
   };
 }
+
+export interface FakeReader extends CharterReader {
+  /** Everything it was asked to read, in order. */
+  readonly seen: ReaderSubject[];
+}
+
+/**
+ * A charter reader that answers from a function instead of a model. By
+ * default it finds that everything fits.
+ */
+export function fakeReader(answer: (subject: ReaderSubject) => Omit<Reading, 'model'> | null = () => FITS): FakeReader {
+  const seen: ReaderSubject[] = [];
+  return {
+    model: 'test-model',
+    seen,
+    async read(subject) {
+      seen.push(subject);
+      const reading = answer(subject);
+      return reading ? { ...reading, model: 'test-model' } : null;
+    },
+  };
+}
+
+export const FITS: Omit<Reading, 'model'> = { verdict: 'fits', summary: 'Nothing seems to break the charter.', concerns: [] };
 
 /**
  * Adds a member directly, skipping password hashing so tests stay quick.

@@ -12,11 +12,13 @@
  * the edge, close to the person, and passes the result inward.
  */
 import { DurableObject } from 'cloudflare:workers';
+import { claudeReader } from './ai/claude-reader.js';
 import { configFromEnv } from './config.js';
 import { hashPassword, passwordProof, randomInt } from './core/crypto.js';
 import type { Context } from './services/context.js';
 import { shareRunningCosts } from './services/costs.js';
 import { passwordSalt } from './services/members.js';
+import { readUnreadProjects } from './services/reader.js';
 import { drawWaitingCircles, settleDueReviews } from './services/reviews.js';
 import { durableObjectSql } from './store/do-sqlite.js';
 import { migrate } from './store/schema.js';
@@ -37,7 +39,14 @@ export class Commons extends DurableObject<Env> {
     super(state, env);
     const sql = durableObjectSql(state.storage);
     migrate(sql);
-    this.services = { sql, config: configFromEnv(textSettings(env)), now: () => new Date(), randomInt };
+    const settings = textSettings(env);
+    const config = configFromEnv(settings);
+    // The charter reader runs only when an Anthropic API key has been set as a secret.
+    const apiKey = settings.ANTHROPIC_API_KEY?.trim();
+    const reader = apiKey
+      ? claudeReader({ apiKey, model: config.readerModel, baseURL: settings.ANTHROPIC_BASE_URL?.trim() })
+      : undefined;
+    this.services = { sql, config, now: () => new Date(), randomInt, reader };
     this.app = createApp({ context: this.services, edgeAuth: true });
   }
 
@@ -52,14 +61,16 @@ export class Commons extends DurableObject<Env> {
 
   /**
    * The daily round: settle charter circles whose time is up, draw any that
-   * are still waiting for people, and on the first of the month share running
-   * costs across the pools.
+   * are still waiting for people, on the first of the month share running
+   * costs across the pools, and let the charter reader catch up on projects
+   * it has not read.
    */
-  daily(): { settled: number; shared: number } {
+  async daily(): Promise<{ settled: number; shared: number; read: number }> {
     const settled = settleDueReviews(this.services);
     drawWaitingCircles(this.services);
     const shared = this.services.now().getUTCDate() === 1 ? shareRunningCosts(this.services)?.amount ?? 0n : 0n;
-    return { settled, shared: Number(shared) };
+    const read = await readUnreadProjects(this.services);
+    return { settled, shared: Number(shared), read };
   }
 }
 
@@ -118,6 +129,8 @@ export default {
 
   async scheduled(_controller, env) {
     const result = await commons(env).daily();
-    console.log(`Daily round: ${result.settled} circles settled, ${result.shared} shared as running costs`);
+    console.log(
+      `Daily round: ${result.settled} circles settled, ${result.shared} shared as running costs, ${result.read} projects read`,
+    );
   },
 } satisfies ExportedHandler<Env>;

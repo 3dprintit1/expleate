@@ -2,27 +2,19 @@ import { Hono, type Context as HonoContext } from 'hono';
 import type { FC } from 'hono/jsx';
 import { type Concern, RULES, SPIRITS, type Spirit, isSpirit, ruleById } from '../../core/charter.js';
 import { parseAmount } from '../../core/money.js';
+import { type Reading, wantsALook } from '../../core/reader.js';
 import { Problem } from '../../services/context.js';
 import { memberGroups } from '../../services/groups.js';
-import {
-  contribute,
-  poolLedger,
-  poolPeople,
-  portionFor,
-  takeBack,
-  takeBackNotes,
-  useResources,
-} from '../../services/pools.js';
+import { contribute, poolLedger, poolPeople, portionFor, takeBack, takeBackNotes } from '../../services/pools.js';
 import {
   type ListOrder,
   type ListShow,
   type ProposalInput,
   finishProject,
   listProjects,
-  postUpdate,
   projectUpdates,
-  proposeProject,
 } from '../../services/projects.js';
+import { type ReadResult, recordUse, shareNews, suggestProject } from '../../services/reader.js';
 import { type Project, isHost, requireProject } from '../../services/records.js';
 import { flagProject, reviewsForProject } from '../../services/reviews.js';
 import {
@@ -34,6 +26,7 @@ import {
   Icon,
   Paragraphs,
   ProjectCard,
+  ReaderConcerns,
   SPIRIT_NAMES,
   STATUS_NAMES,
   SpiritTags,
@@ -198,18 +191,19 @@ interface ProposeFormProps {
   form: Form;
   error?: string | undefined;
   concerns?: readonly Concern[] | undefined;
+  reading?: Reading | null | undefined;
 }
 
-const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
+const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns = [], reading }) => {
   const ctx = c.get('ctx');
   const member = c.get('member')!;
   const groups = memberGroups(ctx, member.id);
   const chosen = new Set(fields(form, 'spirits'));
-  const topics = concerns
-    ? new Intl.ListFormat('en-GB', { type: 'disjunction' }).format([
-        ...new Set(concerns.map((concern) => ruleById(concern.rule)?.topic ?? concern.rule)),
-      ])
-    : '';
+  const readerWantsALook = wantsALook(reading ?? null);
+  const secondLook = concerns.length > 0 || readerWantsALook;
+  const topics = new Intl.ListFormat('en-GB', { type: 'disjunction' }).format([
+    ...new Set(concerns.map((concern) => ruleById(concern.rule)?.topic ?? concern.rule)),
+  ]);
   return (
     <section class="narrow">
       <h1>Suggest a project</h1>
@@ -220,20 +214,31 @@ const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
       <ErrorSummary message={error} />
       <form method="post" action="/projects" class="form glass panel">
         <Csrf c={c} />
-        {concerns && concerns.length > 0 && (
+        {secondLook && (
           <div class="note" role="alert">
-            <h2>Some words need a second look</h2>
-            <p>These often mean a project is about {topics}:</p>
-            <ul>
-              {concerns.map((concern) => (
-                <li>
-                  <strong>“{concern.term}”</strong> in “{concern.excerpt}”
-                </li>
-              ))}
-            </ul>
+            <h2>This needs a second look</h2>
+            {concerns.length > 0 && (
+              <>
+                <p>These words often mean a project is about {topics}:</p>
+                <ul>
+                  {concerns.map((concern) => (
+                    <li>
+                      <strong>“{concern.term}”</strong> in “{concern.excerpt}”
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {readerWantsALook && reading && (
+              <>
+                <h3>
+                  The <a href="/reader">charter reader</a> says
+                </h3>
+                <ReaderConcerns reading={reading} />
+              </>
+            )}
             <p>
-              Reword them, or tell us why the project fits. A circle of people picked at random will read your reason and
-              decide.
+              Reword it, or tell us why it fits. A circle of people picked at random will read your reason and decide.
             </p>
             <label class="label" for="concernNote">
               Why it fits
@@ -311,7 +316,12 @@ const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
           <input type="checkbox" name="agreed" value="yes" checked={checked(form, 'agreed')} required />
           <span>It fits the charter.</span>
         </label>
-        <button type="submit">{concerns && concerns.length > 0 ? 'Send to a circle' : 'Suggest it'}</button>
+        <button type="submit">{secondLook ? 'Send to a circle' : 'Suggest it'}</button>
+        {ctx.reader && (
+          <p class="faint">
+            The <a href="/reader">charter reader</a>, an AI, reads it first. That takes a few seconds.
+          </p>
+        )}
       </form>
     </section>
   );
@@ -319,7 +329,7 @@ const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
 
 projects.get('/projects/new', signedIn, (c) => page(c, 'Suggest a project', <ProposeForm c={c} form={{}} />));
 
-projects.post('/projects', signedIn, (c) => {
+projects.post('/projects', signedIn, async (c) => {
   const ctx = c.get('ctx');
   const member = c.get('member')!;
   const form = c.get('form');
@@ -339,10 +349,15 @@ projects.post('/projects', signedIn, (c) => {
       concernNote: field(form, 'concernNote'),
       agreed: checked(form, 'agreed'),
     };
-    const result = proposeProject(ctx, member.id, input);
+    const result = await suggestProject(ctx, member.id, input);
     if (result.kind === 'concerns') {
       const error = field(form, 'concernNoteShown') ? 'Please give a reason of at least 20 characters.' : undefined;
-      return page(c, 'Suggest a project', <ProposeForm c={c} form={form} concerns={result.concerns} error={error} />, 400);
+      return page(
+        c,
+        'Suggest a project',
+        <ProposeForm c={c} form={form} concerns={result.concerns} reading={result.reading} error={error} />,
+        400,
+      );
     }
     flash(c, 'ok', result.project.status === 'open' ? 'Your project is live.' : 'Thanks. A circle has been picked to read your reason.');
     return c.redirect(`/projects/${result.project.id}`, 303);
@@ -700,20 +715,29 @@ projects.post('/projects/:id/take-back', signedIn, (c) => {
   return c.redirect(`/projects/${id}`, 303);
 });
 
-projects.post('/projects/:id/use', signedIn, (c) => {
+/** Adds what the charter reader did, if anything, to a thank-you message. */
+function withReader(message: string, result: ReadResult): string {
+  if (!result.flagged) return message;
+  const flagged = `${message} The charter reader thinks it may break the charter, so it has flagged the project.`;
+  return result.flagged.circleDrawn
+    ? `${flagged} That makes enough flags, so the pool is paused while a circle decides.`
+    : `${flagged} People will decide.`;
+}
+
+projects.post('/projects/:id/use', signedIn, async (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
   const form = c.get('form');
-  useResources(ctx, id, c.get('member')!.id, amountField(ctx.config, form), field(form, 'description'));
-  flash(c, 'ok', 'Use recorded. Everyone can see it.');
+  const result = await recordUse(ctx, id, c.get('member')!.id, amountField(ctx.config, form), field(form, 'description'));
+  flash(c, 'ok', withReader('Use recorded. Everyone can see it.', result));
   return c.redirect(`/projects/${id}`, 303);
 });
 
-projects.post('/projects/:id/updates', signedIn, (c) => {
+projects.post('/projects/:id/updates', signedIn, async (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
-  postUpdate(ctx, id, c.get('member')!.id, field(c.get('form'), 'body'));
-  flash(c, 'ok', 'News shared.');
+  const result = await shareNews(ctx, id, c.get('member')!.id, field(c.get('form'), 'body'));
+  flash(c, 'ok', withReader('News shared.', result));
   return c.redirect(`/projects/${id}`, 303);
 });
 

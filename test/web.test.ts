@@ -5,7 +5,7 @@ import { hashPassword, passwordProof } from '../src/core/crypto.js';
 import { passwordSalt } from '../src/services/members.js';
 import { createApp } from '../src/web/app.js';
 import { EDGE_HEADERS } from '../src/web/edge.js';
-import { testContext, type TestContext } from './helpers.js';
+import { FITS, fakeReader, testContext, type TestContext } from './helpers.js';
 
 type App = ReturnType<typeof createApp>;
 
@@ -280,7 +280,7 @@ describe('pooling through the site', () => {
     const first = await mateo.post('/projects', fields);
     expect(first.status).toBe(400);
     const text = await first.text();
-    expect(text).toContain('Some words need a second look');
+    expect(text).toContain('This needs a second look');
     expect(text).toContain('war or the military');
 
     const second = await mateo.post('/projects', {
@@ -289,6 +289,55 @@ describe('pooling through the site', () => {
     });
     expect(second.status).toBe(303);
     expect(await mateo.text(second.headers.get('location')!)).toContain('Waiting for its circle');
+  });
+});
+
+describe('the charter reader on the site', () => {
+  it('shows its instructions word for word, and says when it is switched off', async () => {
+    const page = await new Browser(app).text('/reader');
+    expect(page).toContain('It can only ask');
+    expect(page).toContain('The reader is switched off on this site');
+    expect(page).toContain('You are the charter reader for Expleate');
+  });
+
+  it('shows the proposer what the reader noticed, and tells hosts when it flags news', async () => {
+    ctx = testContext({ CARETAKERS: 'keeper' }, 1, fakeReader((subject) => {
+      if (subject.kind === 'proposal' && subject.plans.includes('prize')) {
+        return {
+          verdict: 'breaks',
+          summary: 'A cash prize is financial gain.',
+          concerns: [{ rule: 'gain', quote: 'a cash prize of $100', reason: 'The charter rules out prizes of money.' }],
+        };
+      }
+      if (subject.kind === 'news' && subject.text.includes('wages')) {
+        return {
+          verdict: 'breaks',
+          summary: 'This pays the hosts.',
+          concerns: [{ rule: 'gain', quote: 'wages', reason: 'Pools never pay anyone for their time.' }],
+        };
+      }
+      return FITS;
+    }));
+    app = createApp({ context: ctx });
+    const amara = await joined('amara');
+
+    const first = await amara.post('/projects', {
+      title: 'Sea swim at sunrise',
+      summary: 'A sunrise swim for anyone, with hot tea on the beach after.',
+      story: STORY,
+      plans: 'Tea, towels, and a cash prize of $100 for the fastest swimmer.',
+      spirits: ['joy'],
+      hope: '300',
+      agreed: 'yes',
+    });
+    expect(first.status).toBe(400);
+    const form = await first.text();
+    expect(form).toContain('A cash prize is financial gain.');
+    expect(form).toContain('“a cash prize of $100”: The charter rules out prizes of money.');
+
+    const path = await proposed(amara);
+    await amara.post(`${path}/updates`, { body: 'We have decided to pay ourselves wages.' });
+    expect(await amara.text(path)).toContain('so it has flagged the project');
   });
 });
 

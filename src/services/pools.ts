@@ -138,20 +138,35 @@ export function applyUse(
   record(ctx, { kind, memberId, projectId: project.id, amount, poolAfter: next.pool.balance, note });
 }
 
-/** A host records resources used for the project. */
+export function cleanUseDescription(description: string): string {
+  return cleanText(description, { label: 'What it was for', field: 'description', min: 3, max: 500 });
+}
+
+/** Checks that someone may record a use of a project's pool and, given an amount, that the pool can cover it. */
+export function checkCanUse(ctx: Context, project: Project, memberId: string, amount?: bigint): void {
+  requireHost(ctx, project, memberId);
+  if (project.status !== 'open') throw new Problem(notOpenMessage(project), 409);
+  if (amount !== undefined) poolMaths(() => useFromPoolMaths(poolOf(project), amount));
+}
+
+/** A host records resources used for the project. Returns the use's place in the ledger. */
 export function useResources(
   ctx: Context,
   projectId: string,
   memberId: string,
   amount: bigint,
   description: string,
-): void {
-  const what = cleanText(description, { label: 'What it was for', field: 'description', min: 3, max: 500 });
-  ctx.sql.transaction(() => {
+): string {
+  const what = cleanUseDescription(description);
+  return ctx.sql.transaction(() => {
     const project = requireProject(ctx, projectId);
-    requireHost(ctx, project, memberId);
-    if (project.status !== 'open') throw new Problem(notOpenMessage(project), 409);
+    checkCanUse(ctx, project, memberId);
     applyUse(ctx, project, amount, 'use', what, memberId);
+    const entry = ctx.sql.get<{ id: number }>(
+      "SELECT MAX(id) AS id FROM ledger WHERE project_id = ? AND kind = 'use'",
+      projectId,
+    );
+    return String(entry?.id ?? '');
   });
 }
 

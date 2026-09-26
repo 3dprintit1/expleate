@@ -9,8 +9,9 @@ A request to expleat.ing takes this path:
 1. **Cloudflare's edge** serves the stylesheet, fonts and icon directly. They cost nothing and never touch the code.
 2. **The Worker** receives everything else. It strips any header a visitor could use to fake an internal message. For joining and signing in, it limits how often each place and each handle can try, and does the slow password work itself.
 3. **The Commons**, a single Durable Object, holds the whole ledger in its own SQLite database: people, pools, portions, projects, circles, costs. It renders the page and sends it back.
+4. **The charter reader**, when someone suggests a project, shares news or records a use. The Commons sends the text to Anthropic's API and waits a few seconds for the answer before saving anything. It carries on serving everyone else while it waits.
 
-Once a day a scheduled job settles circles whose time is up, and on the first of the month shares running costs across the pools.
+Once a day a scheduled job settles circles whose time is up, lets the charter reader catch up on any project it could not read, and on the first of the month shares running costs across the pools.
 
 The same code also runs on an ordinary server with Node and a SQLite file, for development and for anyone who wants to host their own Expleate.
 
@@ -20,7 +21,7 @@ The Commons handles one request at a time. When someone puts $20 into a pool, it
 
 The price of that simplicity is a ceiling. Cloudflare suggests about 1,000 requests a second for one Durable Object, and each page takes the Commons a few milliseconds. In practice that means a few hundred page views a second, which is enough for tens of thousands of people using Expleate every day. A single Durable Object can store 10 GB, which is room for millions of pool movements.
 
-Anything slow must happen before a request reaches the Commons, or everyone waits. The only deliberately slow thing on the site, checking a password (about 45 ms of work), already happens at the edge.
+Anything that keeps the processor busy must happen before a request reaches the Commons, or everyone waits. The only deliberately slow thing on the site, checking a password (about 45 ms of work), already happens at the edge. Waiting on the network is different: while the Commons waits for the charter reader, it serves other requests. So the code always asks the reader first, and only then reads and writes the books, in one go.
 
 ## How it grows
 
@@ -43,26 +44,13 @@ Everything in pools today is pretend. Connecting real money is the largest piece
 
 The places in the code where money would arrive and leave are `addResources` and `moveOut` in `src/services/members.ts`.
 
-## One person, one account
+## One person, one voice
 
-Charter circles and flags only work if each person has one account. Today nothing stops someone opening several. That would let one person flag a project three times, or sit in a circle as more than one voice.
-
-What is in place:
-
-- A circle never includes anyone who hosts the project, has put resources into it or has flagged it.
-- Circles are drawn at random from every member, so a handful of fake accounts matters less as the community grows.
-- Someone who flagged a project that a circle then found fits must wait 30 days to flag it again.
-- Joining and signing in are rate-limited.
-
-What is still needed, probably in this order:
-
-- Once real money flows, anyone who has put money in has passed the payment partner's identity check. Only verified people could then sit in circles or flag projects.
-- Until then, a light check such as a phone number, or being vouched for by existing members.
-- A minimum age for accounts that sit in circles, such as 30 days.
+Charter circles and flags only work if each person has one voice. [One person, one voice](one-person-one-voice.md) sets out what stops someone from opening several accounts, what is in place today, and the layers still to come.
 
 ## Safety
 
-The charter check and charter circles cover what projects are for. Still missing:
+The word check, the charter reader and charter circles cover what projects are for. The reader reads news and uses as well as proposals, so a project that drifts away from what it promised can be flagged even if nobody is watching it. Still missing:
 
 - a way to report harmful words in updates and notes
 - a way to suspend an account that is abusing others, decided by a circle rather than by one person
@@ -93,7 +81,7 @@ Still missing: letting people download their data and close their account, which
 
 - [ ] A legal home, and legal advice for the first countries
 - [ ] A payment partner that holds pooled money separately and pays suppliers directly
-- [ ] Identity checks, and circles limited to verified people
+- [ ] Identity checks, and circles limited to verified people (see [one person, one voice](one-person-one-voice.md))
 - [ ] Daily reconciliation between the ledger and the payment partner
 - [ ] Account download and deletion
 - [ ] Reports of harmful content, and a contact for legal requests

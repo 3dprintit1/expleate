@@ -24,6 +24,12 @@ export interface Config {
   readonly caretakers: ReadonlySet<string>;
   /** The most of all pools that one running-cost share may take, in parts per million. */
   readonly maxCostSharePpm: number;
+  /** The Claude model the charter reader asks for. */
+  readonly readerModel: string;
+  /** The most readings the charter reader makes in a day, across everyone, which caps what it costs. */
+  readonly readerDailyReads: number;
+  /** The most readings one person's writing can take up in a day. */
+  readonly readerReadsPerPerson: number;
 }
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -60,5 +66,8 @@ export function configFromEnv(env: Env): Config {
     sessionDays: whole(env.SESSION_DAYS, 30, 1, 365),
     caretakers: new Set(caretakers),
     maxCostSharePpm: whole(env.MAX_COST_SHARE_PPM, DEFAULT_MAX_SHARE_PPM, 0, 1_000_000),
+    readerModel: env.READER_MODEL?.trim() || 'claude-opus-5',
+    readerDailyReads: whole(env.READER_DAILY_READS, 200, 0, 1_000_000),
+    readerReadsPerPerson: whole(env.READER_READS_PER_PERSON, 20, 0, 10_000),
   };
 }

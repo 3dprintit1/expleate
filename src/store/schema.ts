@@ -181,6 +181,36 @@ CREATE TABLE cost_shares (
   pools INTEGER NOT NULL
 );
 `,
+  /* 2: the charter reader */ `
+-- The charter reader is recorded as a member, so its flags sit alongside
+-- people's. It can never sign in, join a group or sit in a circle, and its
+-- handle has a hyphen, which no person's handle can.
+ALTER TABLE members ADD COLUMN kind TEXT NOT NULL DEFAULT 'person' CHECK (kind IN ('person', 'reader'));
+INSERT INTO members (id, handle, name, password_hash, balance, created_at, kind)
+VALUES ('charter-reader', 'charter-reader', 'The charter reader', '!', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'reader');
+
+-- Everything the reader has read about a project, including what it found fine.
+CREATE TABLE reader_notes (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  subject TEXT NOT NULL CHECK (subject IN ('proposal', 'news', 'use')),
+  subject_id TEXT,
+  verdict TEXT NOT NULL CHECK (verdict IN ('fits', 'unsure', 'breaks')),
+  summary TEXT NOT NULL,
+  concerns TEXT NOT NULL DEFAULT '[]',
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX reader_notes_project ON reader_notes(project_id, subject, created_at);
+
+-- How many readings each person's writing took up each day, to keep the cost in check.
+CREATE TABLE reader_usage (
+  day TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  reads INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, member_id)
+);
+`,
 ];
 
 export function migrate(sql: Sql): void {
