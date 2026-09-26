@@ -1,4 +1,5 @@
 import type { Context as HonoContext } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { raw } from 'hono/html';
 import type { Child, FC, PropsWithChildren } from 'hono/jsx';
 import { type Spirit, ruleById } from '../core/charter.js';
@@ -7,6 +8,7 @@ import type { ReaderConcern } from '../core/reader.js';
 import type { Context } from '../services/context.js';
 import { getGroup } from '../services/groups.js';
 import { type Project, type ProjectStatus, getMember } from '../services/records.js';
+import { STYLES_VERSION } from './docs.generated.js';
 import type { AppEnv } from './env.js';
 import { money, plural } from './format.js';
 
@@ -28,6 +30,55 @@ export const STATUS_NAMES: Record<ProjectStatus, string> = {
 
 type Status = 200 | 400 | 401 | 403 | 404 | 409 | 500;
 
+export interface Display {
+  /** Light or dark colours, or null to follow the device. */
+  readonly theme: 'light' | 'dark' | null;
+  /** 'still' turns off every animation, or null for gentle motion, which also follows the device. */
+  readonly motion: 'still' | null;
+}
+
+export function readDisplay(c: HonoContext<AppEnv>): Display {
+  const theme = getCookie(c, 'theme');
+  return {
+    theme: theme === 'light' || theme === 'dark' ? theme : null,
+    motion: getCookie(c, 'motion') === 'still' ? 'still' : null,
+  };
+}
+
+/**
+ * Colours and motion, chosen with one tap each. Every button sends the form,
+ * so it works without any script.
+ */
+export const DisplayForm: FC<{ c: HonoContext<AppEnv>; back: string }> = ({ c, back }) => {
+  const { theme, motion } = readDisplay(c);
+  const option = (name: 'theme' | 'motion', value: string, label: string, pressed: boolean) => (
+    <button type="submit" class="seg" name={name} value={value} aria-pressed={pressed ? 'true' : 'false'}>
+      {label}
+    </button>
+  );
+  return (
+    <form method="post" action="/display" class="display-form">
+      <Csrf c={c} />
+      <input type="hidden" name="back" value={back} />
+      <fieldset>
+        <legend>Colours</legend>
+        <div class="segmented">
+          {option('theme', 'light', 'Light', theme === 'light')}
+          {option('theme', 'auto', 'Auto', theme === null)}
+          {option('theme', 'dark', 'Dark', theme === 'dark')}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Motion</legend>
+        <div class="segmented">
+          {option('motion', 'gentle', 'Gentle', motion === null)}
+          {option('motion', 'still', 'Still', motion === 'still')}
+        </div>
+      </fieldset>
+    </form>
+  );
+};
+
 /** Renders a full page with the site's header and footer. */
 export function page(c: HonoContext<AppEnv>, title: string, body: Child, status: Status = 200) {
   return c.html(
@@ -45,22 +96,25 @@ const Layout: FC<PropsWithChildren<{ c: HonoContext<AppEnv>; title: string }>> =
   const { config } = c.get('ctx');
   const member = c.get('member');
   const flash = c.get('flash');
+  const display = readDisplay(c);
   const path = c.req.path;
+  // After changing the display, come back to this page. A page shown in reply to a form goes home instead.
+  const back = c.req.method === 'GET' ? path + new URL(c.req.url).search : '/';
   const here = (href: string) => (path === href ? 'page' : undefined);
   const initial = member ? ([...member.name.trim()][0] ?? '?').toUpperCase() : '';
   return (
-    <html lang="en-GB">
+    <html lang="en-GB" data-theme={display.theme ?? undefined} data-motion={display.motion ?? undefined}>
       <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="color-scheme" content="light dark" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="color-scheme" content={display.theme ?? 'light dark'} />
         <meta
           name="description"
           content="Pool together for things that bring joy. Put in what you like, and take it back if you change your mind."
         />
         <title>{title === config.siteName ? title : `${title} · ${config.siteName}`}</title>
         <link rel="preload" href="/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
-        <link rel="stylesheet" href="/styles.css" />
+        <link rel="stylesheet" href={`/styles.css?v=${STYLES_VERSION}`} />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body>
@@ -81,6 +135,18 @@ const Layout: FC<PropsWithChildren<{ c: HonoContext<AppEnv>; title: string }>> =
               <a href="/projects/new" aria-current={here('/projects/new')}>
                 Suggest<span class="long"> a project</span>
               </a>
+              <button
+                type="button"
+                class="icon-button"
+                popovertarget="display"
+                aria-label="Display settings"
+                title="Display settings"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8.2" />
+                  <path class="half" d="M12 3.8a8.2 8.2 0 0 1 0 16.4z" />
+                </svg>
+              </button>
               {member ? (
                 <a
                   href="/me"
@@ -104,6 +170,9 @@ const Layout: FC<PropsWithChildren<{ c: HonoContext<AppEnv>; title: string }>> =
             </nav>
           </div>
         </header>
+        <div id="display" popover="auto" class="display-panel" aria-label="Display settings">
+          <DisplayForm c={c} back={back} />
+        </div>
         {flash && (
           <div class={`flash ${flash.kind}`} role={flash.kind === 'error' ? 'alert' : 'status'}>
             <p>{flash.text}</p>
@@ -117,6 +186,7 @@ const Layout: FC<PropsWithChildren<{ c: HonoContext<AppEnv>; title: string }>> =
             <a href="/costs">Running costs</a>
             <a href="/circles">Circles</a>
             <a href="/reader">The charter reader</a>
+            <a href="/display">Display settings</a>
             <a href={config.sourceUrl}>Source code</a>
           </nav>
           <p>Nobody profits here. Running costs are shared at cost, in the open. Amounts are in {config.currency.code}.</p>
@@ -135,7 +205,7 @@ export const Logo: FC = () => (
     </defs>
     <g clip-path="url(#logo-clip)">
       <rect class="air" width="32" height="32" />
-      <path class="water" d="M-4 17 q4 -3.2 8 0 t8 0 t8 0 t8 0 t8 0 V 40 H -4 Z" />
+      <path class="water" d="M-4 17 q4 -3.2 8 0 t8 0 t8 0 t8 0 t8 0 t8 0 V 40 H -4 Z" />
     </g>
     <circle class="rim" cx="16" cy="16" r="15.5" />
   </svg>
@@ -147,13 +217,19 @@ const WAVE_BACK = `M-100 -3 q12.5 4 25 0 ${'t25 0 '.repeat(11)}V 110 H -100 Z`;
 
 /**
  * A pool drawn as a circle of water. The level shows how much has been
- * gathered towards what the project hopes for.
+ * gathered towards what the project hopes for. The water rises to its level
+ * when the gauge comes into view, and the bigger gauges have bubbles.
  */
-export const Gauge: FC<{ id: string; fraction: number; label: string }> = ({ id, fraction, label }) => {
+export const Gauge: FC<{ id: string; fraction: number; label: string; lively?: boolean }> = ({
+  id,
+  fraction,
+  label,
+  lively = false,
+}) => {
   const level = 97 - Math.max(0, Math.min(1, fraction)) * 92;
   const clip = `pool-${id}`;
   return (
-    <svg class="gauge" viewBox="0 0 100 100" role="img" aria-label={label}>
+    <svg class={lively ? 'gauge lively' : 'gauge'} viewBox="0 0 100 100" role="img" aria-label={label}>
       <defs>
         <clipPath id={clip}>
           <circle cx="50" cy="50" r="49" />
@@ -161,10 +237,20 @@ export const Gauge: FC<{ id: string; fraction: number; label: string }> = ({ id,
       </defs>
       <g clip-path={`url(#${clip})`}>
         <rect class="air" width="100" height="100" />
-        <g transform={`translate(0 ${level.toFixed(1)})`}>
-          <path class="wave-back" d={WAVE_BACK} />
-          <path class="wave-front" d={WAVE_FRONT} />
+        <g class="fill">
+          <g transform={`translate(0 ${level.toFixed(1)})`}>
+            <path class="wave-back" d={WAVE_BACK} />
+            <path class="wave-front" d={WAVE_FRONT} />
+            {lively && (
+              <g class="bubbles">
+                <circle cx="31" cy="30" r="1.7" />
+                <circle cx="57" cy="42" r="1.2" />
+                <circle cx="70" cy="24" r="1.4" />
+              </g>
+            )}
+          </g>
         </g>
+        {lively && <path class="glint" d="M20 36 A 31 31 0 0 1 40 17" />}
       </g>
       <circle class="rim" cx="50" cy="50" r="49.5" />
     </svg>
@@ -173,13 +259,14 @@ export const Gauge: FC<{ id: string; fraction: number; label: string }> = ({ id,
 
 type IconName = 'sprout' | 'drop' | 'ripple' | 'return';
 
+// Every shape has pathLength="1", so one drawing animation fits them all.
 const ICONS: Record<IconName, string> = {
   sprout:
-    '<path d="M12 21v-8"/><path d="M12 13c0-4.4 3-7.5 7.5-7.5 0 4.4-3 7.5-7.5 7.5z"/><path d="M12 15.5C12 12 9.5 9.5 5 9.5c0 3.5 2.5 6 7 6z"/>',
-  drop: '<path d="M12 3.2c3.6 4.4 6.2 7.8 6.2 11.1a6.2 6.2 0 0 1-12.4 0c0-3.3 2.6-6.7 6.2-11.1z"/>',
+    '<path pathLength="1" d="M12 21v-8"/><path pathLength="1" d="M12 13c0-4.4 3-7.5 7.5-7.5 0 4.4-3 7.5-7.5 7.5z"/><path pathLength="1" d="M12 15.5C12 12 9.5 9.5 5 9.5c0 3.5 2.5 6 7 6z"/>',
+  drop: '<path pathLength="1" d="M12 3.2c3.6 4.4 6.2 7.8 6.2 11.1a6.2 6.2 0 0 1-12.4 0c0-3.3 2.6-6.7 6.2-11.1z"/>',
   ripple:
-    '<circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="5.8" opacity=".7"/><circle cx="12" cy="12" r="9.4" opacity=".4"/>',
-  return: '<path d="M20 19v-4.5a5 5 0 0 0-5-5H5"/><path d="m9 5.5-4 4 4 4"/>',
+    '<circle pathLength="1" cx="12" cy="12" r="2.2"/><circle pathLength="1" cx="12" cy="12" r="5.8" opacity=".7"/><circle pathLength="1" cx="12" cy="12" r="9.4" opacity=".4"/>',
+  return: '<path pathLength="1" d="M20 19v-4.5a5 5 0 0 0-5-5H5"/><path pathLength="1" d="m9 5.5-4 4 4 4"/>',
 };
 
 export const Icon: FC<{ name: IconName }> = ({ name }) => (

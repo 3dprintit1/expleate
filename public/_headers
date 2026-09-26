@@ -1,0 +1,7 @@
+# Cloudflare serves these files itself. Fonts never change, and the stylesheet
+# is always linked with a version that changes when it does, so browsers can
+# keep both for a year.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/styles.css
+  Cache-Control: public, max-age=31536000, immutable

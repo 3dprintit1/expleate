@@ -58,7 +58,7 @@ The word check, the charter reader and charter circles cover what projects are f
 
 ## Privacy
 
-Expleate uses three cookies, all its own: the session, a token that protects forms, and a one-line message after a form is sent. There are no trackers, adverts or third-party requests.
+Expleate uses three cookies, all its own: the session, a token that protects forms, and a one-line message after a form is sent. Two more remember display settings, light or dark colours and still motion, only for people who choose them. There are no trackers, adverts or third-party requests, and no scripts on any page.
 
 Nobody can see what anyone else has put in. Names appear in pools only if people choose, and alphabetically, so they cannot be matched to the pool's record. That record is dated by day, not to the second, for the same reason.
 

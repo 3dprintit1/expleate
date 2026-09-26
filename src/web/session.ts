@@ -31,6 +31,24 @@ export function sessionToken(c: HonoContext<AppEnv>): string | undefined {
   return getCookie(c, SESSION);
 }
 
+/**
+ * Remembers a display preference, such as dark colours, for a year. Passing
+ * null forgets it. These cookies are only set when someone chooses.
+ */
+export function setPreference(c: HonoContext<AppEnv>, name: 'theme' | 'motion', value: string | null): void {
+  if (value === null) {
+    deleteCookie(c, name, { path: '/', secure: secure(c) });
+    return;
+  }
+  setCookie(c, name, value, {
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: secure(c),
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+  });
+}
+
 /** Leaves a short message to show on the next page, after a redirect. */
 export function flash(c: HonoContext<AppEnv>, kind: Flash['kind'], text: string): void {
   setCookie(c, FLASH, JSON.stringify({ kind, text }), {

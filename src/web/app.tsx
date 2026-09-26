@@ -9,6 +9,7 @@ import { accounts } from './routes/accounts.js';
 import { api } from './routes/api.js';
 import { circles } from './routes/circles.js';
 import { costs } from './routes/costs.js';
+import { display } from './routes/display.js';
 import { groups } from './routes/groups.js';
 import { me } from './routes/me.js';
 import { pages } from './routes/pages.js';
@@ -99,6 +100,7 @@ export function createApp({ context, staticFiles, edgeAuth = false }: AppOptions
   app.route('/', circles);
   app.route('/', costs);
   app.route('/', pages);
+  app.route('/', display);
 
   app.notFound((c) => {
     if (c.req.path.startsWith('/api/')) return c.json({ error: 'Not found' }, 404);

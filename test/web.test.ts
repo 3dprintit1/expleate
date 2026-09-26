@@ -292,6 +292,29 @@ describe('pooling through the site', () => {
   });
 });
 
+describe('display settings', () => {
+  it('remembers colours and motion on this browser, and goes back to the page', async () => {
+    const browser = new Browser(app);
+    const first = await browser.text('/');
+    expect(first).not.toContain('data-theme');
+    expect(first).toMatch(/href="\/styles\.css\?v=[0-9a-f]{12}"/);
+
+    const response = await browser.post('/display', { theme: 'dark', back: '/charter' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/charter');
+    expect(await browser.text('/charter')).toContain('<html lang="en-GB" data-theme="dark">');
+
+    await browser.post('/display', { motion: 'still', back: '/' });
+    expect(await browser.text('/')).toContain('data-motion="still"');
+
+    const away = await browser.post('/display', { theme: 'auto', motion: 'gentle', back: 'https://example.com/' });
+    expect(away.headers.get('location')).toBe('/');
+    const last = await browser.text('/');
+    expect(last).not.toContain('data-theme');
+    expect(last).not.toContain('data-motion');
+  });
+});
+
 describe('the charter reader on the site', () => {
   it('shows its instructions word for word, and says when it is switched off', async () => {
     const page = await new Browser(app).text('/reader');

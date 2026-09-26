@@ -98,7 +98,7 @@ projects.get('/', (c) => {
               </p>
             </div>
             <div class="hero-pool" aria-hidden="true">
-              <Gauge id="hero" fraction={0.62} label="" />
+              <Gauge id="hero" fraction={0.62} label="" lively />
             </div>
           </section>
           <ol class="steps" aria-label="How it works">
@@ -161,24 +161,23 @@ projects.get('/', (c) => {
             </a>
           )}
         </p>
-        <p class="faint">
-          {(Object.keys(ORDERS) as ListOrder[]).map((o, index) => (
-            <>
-              {index > 0 && ' · '}
-              {order === o ? (
-                <strong>{ORDERS[o]}</strong>
-              ) : (
-                <a href={link({ order: o === 'shuffled' ? undefined : o })}>{ORDERS[o]}</a>
-              )}
-            </>
-          ))}
-          {' · '}
-          {show === 'finished' ? (
-            <a href={link({ show: undefined })}>Live projects</a>
-          ) : (
-            <a href={link({ show: 'finished' })}>Finished projects</a>
-          )}
-        </p>
+        <div class="order">
+          <nav class="segmented" aria-label="Order">
+            {(Object.keys(ORDERS) as ListOrder[]).map((o) => (
+              <a href={link({ order: o === 'shuffled' ? undefined : o })} aria-current={order === o ? 'true' : undefined}>
+                {ORDERS[o]}
+              </a>
+            ))}
+          </nav>
+          <nav class="segmented" aria-label="Which projects">
+            <a href={link({ show: undefined })} aria-current={show === 'live' ? 'true' : undefined}>
+              Live
+            </a>
+            <a href={link({ show: 'finished' })} aria-current={show === 'finished' ? 'true' : undefined}>
+              Finished
+            </a>
+          </nav>
+        </div>
       </section>
     </>,
   );
@@ -390,6 +389,7 @@ const PoolCard: FC<{ c: HonoContext<AppEnv>; project: Project }> = ({ c, project
           id={project.id}
           fraction={sofar / project.hope}
           label={`${money(config, sofar)} of ${money(config, project.hope)} gathered`}
+          lively
         />
       )}
       <div class="pool-figure">
@@ -427,7 +427,7 @@ const PoolCard: FC<{ c: HonoContext<AppEnv>; project: Project }> = ({ c, project
             <hr class="divider" />
             <h3>Put something in</h3>
             <AmountChoice config={config} presets={putInPresets(config)} idPrefix="put" otherLabel="Or another amount" />
-            <label class="check">
+            <label class="check switch">
               <input type="checkbox" name="showName" value="yes" checked={portion ? portion.showName : true} />
               <span>Show my name here, never the amount</span>
             </label>
