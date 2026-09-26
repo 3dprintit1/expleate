@@ -97,23 +97,23 @@ export function queryProjects(ctx: Context, sql: string, ...params: (string | nu
 }
 
 /**
- * The people who look after a project: whoever suggested it, or every member
+ * The people who host a project: whoever suggested it, or every member
  * of the group that suggested it.
  */
-export function stewardIds(ctx: Context, project: Project): string[] {
+export function hostIds(ctx: Context, project: Project): string[] {
   if (!project.group_id) return [project.proposer_id];
   return ctx.sql
     .all<{ member_id: string }>('SELECT member_id FROM group_members WHERE group_id = ?', project.group_id)
     .map((row) => row.member_id);
 }
 
-export function isSteward(ctx: Context, project: Project, memberId: string): boolean {
-  return stewardIds(ctx, project).includes(memberId);
+export function isHost(ctx: Context, project: Project, memberId: string): boolean {
+  return hostIds(ctx, project).includes(memberId);
 }
 
-export function requireSteward(ctx: Context, project: Project, memberId: string): void {
-  if (!isSteward(ctx, project, memberId)) {
-    throw new Problem('Only the people looking after this project can do that.', 403);
+export function requireHost(ctx: Context, project: Project, memberId: string): void {
+  if (!isHost(ctx, project, memberId)) {
+    throw new Problem("Only the project's hosts can do that.", 403);
   }
 }
 

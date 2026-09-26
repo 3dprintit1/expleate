@@ -15,5 +15,7 @@ export interface AppEnv {
     csrf: string;
     flash: Flash | undefined;
     form: Form;
+    /** True inside the Cloudflare Durable Object, where the Worker has already checked passwords. */
+    edgeAuth: boolean;
   };
 }

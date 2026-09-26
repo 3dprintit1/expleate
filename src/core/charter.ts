@@ -61,7 +61,6 @@ export const RULES: readonly Rule[] = [
       'congresswoman',
       'senate',
       'senator*',
-      'government*',
       'prime minister',
       'cabinet minister',
       'presidential',
@@ -107,8 +106,18 @@ export const RULES: readonly Rule[] = [
       'ideolog*',
       'dictator*',
       'human rights',
+      'anti-government',
+      'government policy',
+      'campaigning',
+      'campaign for',
+      'campaign against',
+      'voters',
+      'vote against',
+      'rally against',
+      'march against',
+      'protest march',
     ],
-    except: [],
+    except: ['no politics', 'not political'],
   },
   {
     id: 'war',
@@ -169,8 +178,41 @@ export const RULES: readonly Rule[] = [
       'defense industry',
       'defence contractor*',
       'defense contractor*',
+      'troops',
+      'gun',
+      'guns',
+      'handgun*',
+      'shotgun*',
+      'bomb',
+      'bombs',
+      'bombed',
     ],
-    except: ['tug of war', 'swiss army', 'soldier on', 'soldiered on', 'soldiering on'],
+    except: [
+      'tug of war',
+      'swiss army',
+      'soldier on',
+      'soldiered on',
+      'soldiering on',
+      'an army of',
+      'secret weapon',
+      'water balloon war*',
+      'water war*',
+      'pillow war*',
+      'snowball war*',
+      'war paint',
+      'glue gun*',
+      'water gun*',
+      'nerf gun*',
+      'staple gun*',
+      'heat gun*',
+      'bubble gun*',
+      'bath bomb*',
+      'seed bomb*',
+      'glitter bomb*',
+      'yarn bomb*',
+      'photo bomb*',
+      'no war',
+    ],
   },
   {
     id: 'gain',
@@ -179,12 +221,16 @@ export const RULES: readonly Rule[] = [
     summary:
       'Nobody profits. No selling, no investing, no businesses, no wages or fees paid from a pool, no money prizes.',
     watch: [
-      'profit*',
+      'profit',
+      'profits',
+      'profitable',
+      'profitability',
+      'profiting',
+      'profited',
+      'profiteer*',
       'revenue*',
       'income',
       'invest',
-      'invests',
-      'invested',
       'investing',
       'investment*',
       'investor*',
@@ -269,8 +315,31 @@ export const RULES: readonly Rule[] = [
       'admission fee*',
       'ticket price*',
       'charge admission',
+      'startup',
+      'startups',
     ],
-    except: ['non-profit', 'nonprofit', 'not-for-profit', 'not for profit', 'no profit', 'no entry fee'],
+    except: [
+      'non-profit',
+      'nonprofit',
+      'not-for-profit',
+      'not for profit',
+      'no profit',
+      'no entry fee',
+      'nobody profits',
+      'nobody profit*',
+      'no profits',
+      'no wage*',
+      'no salar*',
+      'nothing is for sale',
+      'nothing for sale',
+      'not for sale',
+      'no ticket price*',
+      'no selling',
+      'not selling',
+      'never sold',
+      'no sales',
+      'startup cost*',
+    ],
   },
   {
     id: 'charity',
@@ -283,8 +352,6 @@ export const RULES: readonly Rule[] = [
       'charities',
       'charitable',
       'donate',
-      'donates',
-      'donated',
       'donating',
       'donation*',
       'donor*',
@@ -323,7 +390,16 @@ export const RULES: readonly Rule[] = [
       'ngo',
       'ngos',
     ],
-    except: ['charity shop', 'charity shops'],
+    except: [
+      'charity shop',
+      'charity shops',
+      'murder mystery victim*',
+      'fashion victim*',
+      'not a charity',
+      'not charity',
+      'no donation*',
+      'no fundraising',
+    ],
   },
   {
     id: 'harm',
@@ -415,6 +491,28 @@ function excerptAround(text: string, start: number, end: number): string {
   return `${before}${text.slice(from, to).replace(/\s+/g, ' ').trim()}${after}`;
 }
 
+/** Characters that take up no space, which could hide a word from the check. */
+const INVISIBLE = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\u3164\ufeff\uffa0]/g;
+
+/** Cyrillic and Greek letters that look like Latin ones, read as the Latin letter. */
+const LOOK_ALIKES: Record<string, string> = {
+  а: 'a', в: 'b', е: 'e', ё: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x',
+  ѕ: 's', і: 'i', ї: 'i', ј: 'j', ԁ: 'd', ӏ: 'l', ԛ: 'q', ԝ: 'w', ү: 'y',
+  А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X',
+  Ѕ: 'S', І: 'I', Ј: 'J',
+  α: 'a', ε: 'e', ι: 'i', κ: 'k', ν: 'v', ο: 'o', ρ: 'p', τ: 't', υ: 'u', χ: 'x',
+  Α: 'A', Β: 'B', Ε: 'E', Ζ: 'Z', Η: 'H', Ι: 'I', Κ: 'K', Μ: 'M', Ν: 'N', Ο: 'O', Ρ: 'P', Τ: 'T', Υ: 'Y', Χ: 'X',
+};
+const LOOK_ALIKE = new RegExp(`[${Object.keys(LOOK_ALIKES).join('')}]`, 'g');
+
+/** The text as the check reads it: no invisible characters, and look-alike letters read as Latin. */
+export function forScreening(text: string): string {
+  return text
+    .normalize('NFKC')
+    .replace(INVISIBLE, '')
+    .replace(LOOK_ALIKE, (letter) => LOOK_ALIKES[letter] ?? letter);
+}
+
 /**
  * Looks through the named fields of a proposal and returns anything that
  * might break the charter. Each rule and wording is reported once.
@@ -424,7 +522,7 @@ export function screen(fields: Readonly<Record<string, string>>): Concern[] {
   const seen = new Set<string>();
 
   for (const [field, raw] of Object.entries(fields)) {
-    const text = raw.normalize('NFKC');
+    const text = forScreening(raw);
     for (const rule of COMPILED) {
       const excepted: Array<[number, number]> = [];
       if (rule.except) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { castVote, flagProject, openSeatsFor, settleDueReviews } from '../src/services/reviews.js';
-import { contribute, portionFor, poolLedger, takeBack, useResources } from '../src/services/pools.js';
+import { contribute, poolLedger, poolPeople, portionFor, takeBack, useResources } from '../src/services/pools.js';
 import { finishProject, listProjects, postUpdate, proposeProject, type ProposalInput } from '../src/services/projects.js';
 import { answerInvite, createGroup, inviteToGroup, leaveGroup } from '../src/services/groups.js';
 import { costsOverview, recordCost, recordCover, shareRunningCosts } from '../src/services/costs.js';
@@ -98,13 +98,13 @@ describe('pools', () => {
     expect(() => contribute(ctx, project.id, amara.id, dollars(61), true)).toThrow(/enough resources/);
   });
 
-  it('only lets stewards use a pool', () => {
+  it('only lets hosts use a pool', () => {
     const ctx = testContext();
     const amara = makeMember(ctx, 'amara', 100);
     const kenji = makeMember(ctx, 'kenji', 100);
     const project = openProject(ctx, amara.id);
     contribute(ctx, project.id, kenji.id, dollars(100), true);
-    expect(() => useResources(ctx, project.id, kenji.id, dollars(10), 'Snacks for me')).toThrow(/looking after/);
+    expect(() => useResources(ctx, project.id, kenji.id, dollars(10), 'Snacks for me')).toThrow(/hosts can do that/);
   });
 
   it('starts people afresh after a pool is used up entirely', () => {
@@ -120,6 +120,18 @@ describe('pools', () => {
     expect(valueOf(ctx, project.id, kenji.id)).toBe(3_000);
     expect(requireProject(ctx, project.id).people).toBe(1);
     expectConservation(ctx);
+  });
+
+  it('lists named people alphabetically, never in the order they joined', () => {
+    const ctx = testContext();
+    const host = makeMember(ctx, 'host');
+    const project = openProject(ctx, host.id);
+    for (const handle of ['zoe', 'amara', 'mateo', 'bea']) {
+      const person = makeMember(ctx, handle, 10);
+      contribute(ctx, project.id, person.id, dollars(10), true);
+    }
+    expect(poolPeople(ctx, requireProject(ctx, project.id)).named.map((p) => p.handle)).toEqual(['amara', 'bea', 'mateo', 'zoe']);
+    expect(poolLedger(ctx, project.id)[0]!.at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('keeps the public ledger anonymous apart from uses', () => {
@@ -161,12 +173,12 @@ describe('finishing projects', () => {
     expectConservation(ctx);
   });
 
-  it('only lets stewards finish a project', () => {
+  it('only lets hosts finish a project', () => {
     const ctx = testContext();
     const amara = makeMember(ctx, 'amara');
     const kenji = makeMember(ctx, 'kenji');
     const project = openProject(ctx, amara.id);
-    expect(() => finishProject(ctx, project.id, kenji.id, 'stopped', 'I would like it to stop please.')).toThrow(/looking after/);
+    expect(() => finishProject(ctx, project.id, kenji.id, 'stopped', 'I would like it to stop please.')).toThrow(/hosts can do that/);
   });
 });
 
@@ -214,7 +226,7 @@ describe('the charter check and circles', () => {
 
     expect(flagProject(ctx, project.id, flaggers[0]!.id, 'gain', 'The plans now say they will sell the lanterns.')).toEqual({ circleDrawn: false });
     expect(() => flagProject(ctx, project.id, flaggers[0]!.id, 'gain', 'Flagging a second time.')).toThrow(/already flagged/);
-    expect(() => flagProject(ctx, project.id, amara.id, 'gain', 'Flagging my own project.')).toThrow(/look after/);
+    expect(() => flagProject(ctx, project.id, amara.id, 'gain', 'Flagging my own project.')).toThrow(/host this project/);
     expect(flagProject(ctx, project.id, flaggers[1]!.id, 'gain', 'Selling lanterns is financial gain.')).toEqual({ circleDrawn: true });
 
     expect(requireProject(ctx, project.id).status).toBe('review');
@@ -249,13 +261,27 @@ describe('the charter check and circles', () => {
     ctx.advanceDays(2);
     expect(settleDueReviews(ctx)).toBe(1);
     expect(requireProject(ctx, project.id).status).toBe('open');
-    // Their flag is settled, so they may flag again if things change.
+    // The same person must wait before flagging it again, so a few accounts cannot keep it paused.
+    expect(() => flagProject(ctx, project.id, lena.id, 'spirit', 'Flagging it straight away again.')).toThrow(/flag it again from/);
+    ctx.advanceDays(31);
     expect(flagProject(ctx, project.id, lena.id, 'spirit', 'Flagging again after the new plans.')).toEqual({ circleDrawn: true });
+  });
+
+  it('refuses votes once a circle’s time is up', () => {
+    const ctx = testContext({ FLAG_THRESHOLD: '1', CIRCLE_SIZE: '1', REVIEW_DAYS: '7' });
+    const amara = makeMember(ctx, 'amara');
+    const lena = makeMember(ctx, 'lena');
+    const ingrid = makeMember(ctx, 'ingrid');
+    const project = openProject(ctx, amara.id);
+    flagProject(ctx, project.id, lena.id, 'spirit', 'This does not sound joyful to me at all.');
+    const reviewId = openSeatsFor(ctx, ingrid.id)[0]!.review.id;
+    ctx.advanceDays(8);
+    expect(() => castVote(ctx, reviewId, ingrid.id, 'breaks', 'spirit', '')).toThrow(/time is up/);
   });
 });
 
 describe('groups', () => {
-  it('makes every member of a group a steward of its projects', () => {
+  it('makes every member of a group a host of its projects', () => {
     const ctx = testContext();
     const amara = makeMember(ctx, 'amara');
     const kenji = makeMember(ctx, 'kenji', 50);
@@ -263,7 +289,7 @@ describe('groups', () => {
     const project = openProject(ctx, amara.id, { groupId: group.id });
     contribute(ctx, project.id, kenji.id, dollars(50), true);
 
-    expect(() => useResources(ctx, project.id, kenji.id, dollars(5), 'Glue')).toThrow(/looking after/);
+    expect(() => useResources(ctx, project.id, kenji.id, dollars(5), 'Glue')).toThrow(/hosts can do that/);
     inviteToGroup(ctx, group.id, amara.id, 'kenji');
     answerInvite(ctx, group.id, kenji.id, true);
     useResources(ctx, project.id, kenji.id, dollars(5), 'Glue');
@@ -309,6 +335,24 @@ describe('running costs', () => {
 
     expect(shareRunningCosts(ctx)?.amount).toBe(dollars(2));
     expect(costsOverview(ctx).totals.outstanding).toBe(dollars(3));
+  });
+
+  it('never takes more than the monthly limit, however often costs are shared', () => {
+    const ctx = testContext({ CARETAKERS: 'founder_alan', MAX_COST_SHARE_PPM: '20000' });
+    const founder = makeMember(ctx, 'founder_alan');
+    const amara = makeMember(ctx, 'amara', 1_000);
+    const project = openProject(ctx, amara.id);
+    contribute(ctx, project.id, amara.id, dollars(1_000), true);
+    recordCost(ctx, founder.id, { incurredOn: '2026-09-30', description: 'A big bill', amount: dollars(500), receiptUrl: '' });
+
+    expect(shareRunningCosts(ctx)?.amount).toBe(dollars(20));
+    for (let i = 0; i < 10; i++) expect(shareRunningCosts(ctx)).toBeNull();
+    expect(requireProject(ctx, project.id).pool_costs).toBe(2_000);
+
+    // Next month the pool can give its share again.
+    ctx.advanceDays(31);
+    expect(shareRunningCosts(ctx)?.amount).toBe(1_960n);
+    expectConservation(ctx);
   });
 
   it('only lets caretakers record costs', () => {

@@ -20,7 +20,7 @@ import {
   queryProjects,
   record,
   requireProject,
-  requireSteward,
+  requireHost,
   savePool,
 } from './records.js';
 
@@ -138,7 +138,7 @@ export function applyUse(
   record(ctx, { kind, memberId, projectId: project.id, amount, poolAfter: next.pool.balance, note });
 }
 
-/** A steward records resources used for the project. */
+/** A host records resources used for the project. */
 export function useResources(
   ctx: Context,
   projectId: string,
@@ -149,7 +149,7 @@ export function useResources(
   const what = cleanText(description, { label: 'What it was for', field: 'description', min: 3, max: 500 });
   ctx.sql.transaction(() => {
     const project = requireProject(ctx, projectId);
-    requireSteward(ctx, project, memberId);
+    requireHost(ctx, project, memberId);
     if (project.status !== 'open') throw new Problem(notOpenMessage(project), 409);
     applyUse(ctx, project, amount, 'use', what, memberId);
   });
@@ -162,7 +162,9 @@ export function useResources(
  */
 export function settlePool(ctx: Context, project: Project, reason: string): void {
   const rows = ctx.sql.all<PortionRow>(
-    "SELECT * FROM portions WHERE project_id = ? AND weight != '0' ORDER BY joined_at, member_id",
+    // Ordered by member id, which is random, so the public record of hand-backs
+    // says nothing about who joined when.
+    "SELECT * FROM portions WHERE project_id = ? AND weight != '0' ORDER BY member_id",
     project.id,
   );
   const pool = poolOf(project);
@@ -272,7 +274,9 @@ export function poolLedger(ctx: Context, projectId: string, limit = 200): Public
       limit,
     )
     .map((row) => ({
-      at: row.at,
+      // The day is enough to follow the books, and a precise time would help
+      // someone match a contribution to a name.
+      at: row.at.slice(0, 10),
       kind: row.kind,
       amount: row.amount,
       poolAfter: row.pool_after,
@@ -281,7 +285,7 @@ export function poolLedger(ctx: Context, projectId: string, limit = 200): Public
     }));
 }
 
-/** Notes people left when taking their portion back, without their names. For stewards. */
+/** Notes people left when taking their portion back, without their names. For hosts. */
 export function takeBackNotes(ctx: Context, projectId: string): Array<{ at: string; note: string }> {
   return ctx.sql.all(
     "SELECT at, note FROM ledger WHERE project_id = ? AND kind = 'take_back' AND note != '' ORDER BY id DESC LIMIT 100",
@@ -294,12 +298,16 @@ export interface PoolPeople {
   readonly total: number;
 }
 
-/** Who is in a pool now. People who asked not to be named are only counted. */
+/**
+ * Who is in a pool now. People who asked not to be named are only counted.
+ * Names are listed alphabetically: listing them in the order people joined
+ * would let anyone match names to the amounts in the pool's record.
+ */
 export function poolPeople(ctx: Context, project: Project): PoolPeople {
   const named = ctx.sql.all<{ handle: string; name: string }>(
     `SELECT m.handle, m.name FROM portions o JOIN members m ON m.id = o.member_id
       WHERE o.project_id = ? AND o.weight != '0' AND o.show_name = 1
-      ORDER BY o.joined_at LIMIT 60`,
+      ORDER BY m.name COLLATE NOCASE, m.handle LIMIT 60`,
     project.id,
   );
   return { named, total: project.people };

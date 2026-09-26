@@ -15,6 +15,10 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Commons"] }],
 
+  // Joining and signing in are limited to a few tries a minute per place and
+  // per handle. The limit is counted in each Cloudflare location separately.
+  "ratelimits": [{ "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
+
   // Once a day: settle charter circles whose time is up, and on the first of
   // each month share running costs across the pools.
   "triggers": { "crons": ["17 3 * * *"] },

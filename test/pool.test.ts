@@ -133,6 +133,24 @@ describe('pooling maths', () => {
     }
   });
 
+  it('lets anyone who joins after a use take back exactly what they put in', () => {
+    let short = 0;
+    for (let seed = 500; seed < 1_500; seed++) {
+      const random = seeded(seed);
+      const sim = new Simulation(4);
+      for (let i = 0; i < 3; i++) sim.put(i, randomBigInt(random, 1_000_000n));
+      sim.spend(randomBigInt(random, sim.pool.balance - 1n));
+      if (random() < 0.5) sim.take(0, sim.value(0));
+      const amount = randomBigInt(random, 100_000n);
+      const before = [0, 1, 2].map((i) => sim.value(i));
+      sim.put(3, amount);
+      if (sim.value(3) !== amount) short += 1;
+      // Nobody already in the pool lost anything when the newcomer arrived.
+      [0, 1, 2].forEach((i) => expect(sim.value(i) >= before[i]!).toBe(true));
+    }
+    expect(short).toBe(0);
+  });
+
   it('shrinks every portion by the same proportion when resources are used', () => {
     for (let seed = 200; seed < 240; seed++) {
       const random = seeded(seed);

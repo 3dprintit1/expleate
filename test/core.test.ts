@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RULES, screen } from '../src/core/charter.js';
 import { decision, decisionAtDeadline, drawCircle } from '../src/core/circle.js';
-import { amountToShare, outstanding, splitInProportion } from '../src/core/costs.js';
+import { monthlyCaps, outstanding, planShare, splitInProportion } from '../src/core/costs.js';
 import { hashPassword, randomInt, verifyPassword } from '../src/core/crypto.js';
 import { formatAmount, makeCurrency, parseAmount } from '../src/core/money.js';
 import { seeded } from './helpers.js';
@@ -27,6 +27,12 @@ describe('the charter check', () => {
 
   it('leaves everyday joyful writing alone', () => {
     const innocent = [
+      'Profiteroles for everyone after the choir, and a permit from the local government for the square',
+      'A piano donated by a neighbour, an army of knitters and our secret weapon: cake',
+      'A water balloon war in the park, war paint for the kids, then yarn bombing the lamp posts',
+      'At the party the murder-mystery victims get the best costumes',
+      'We invested in a good camera years ago. Startup costs are just paint.',
+      'Nobody profits, no wages, nothing is for sale. No ticket price, no entry fee.',
       'A birthday party with a glue gun craft table and bath bombs',
       'Tug of war on the beach, then a treasure hunt',
       'We will investigate the rock pools and award a paper crown',
@@ -38,6 +44,21 @@ describe('the charter check', () => {
       'Stewart and Warwick are building the kites',
     ];
     for (const text of innocent) expect(terms(text)).toEqual([]);
+  });
+
+  it('catches what it used to miss', () => {
+    expect(terms('Help our startup find its first customers')).toContain('gain:startup');
+    expect(terms('Care parcels for the troops')).toContain('war:troops');
+    expect(terms('We are campaigning for a new bypass')).toContain('politics:campaigning');
+    expect(terms('Target practice with real guns')).toContain('war:guns');
+  });
+
+  it('is not fooled by invisible characters or look-alike letters', () => {
+    // A soft hyphen and a zero-width space hide the word from the eye, not from the check.
+    expect(terms('A big fund\u00adraising night')).toContain('charity:fundraising');
+    expect(terms('We will s\u200bell the prints')).toContain('gain:sell');
+    // "wаr" with a Cyrillic а.
+    expect(terms('A w\u0430r re-enactment')).toContain('war:war');
   });
 
   it('reports each wording once, with where it was found', () => {
@@ -100,12 +121,25 @@ describe('running costs maths', () => {
     expect(parts).toEqual([3n, 3n, 4n]);
   });
 
-  it('works out what is outstanding and how much to share now', () => {
+  it('works out what is outstanding', () => {
     expect(outstanding({ costs: 500n, covered: 20_000n, shared: 0n })).toBe(0n);
     expect(outstanding({ costs: 20_900n, covered: 20_000n, shared: 300n })).toBe(600n);
-    expect(amountToShare(600n, 10_000n, 20_000)).toBe(200n);
-    expect(amountToShare(100n, 10_000n, 20_000)).toBe(100n);
-    expect(amountToShare(100n, 0n, 20_000)).toBe(0n);
+  });
+
+  it('never takes more than a pool’s monthly cap, even when rounding', () => {
+    // Two per cent of each pool, less what it already gave this month.
+    expect(monthlyCaps([10_000n, 30n, 5_000n], [0n, 0n, 60n], 20_000)).toEqual([200n, 0n, 40n]);
+    expect(planShare(600n, [200n, 0n, 40n])).toEqual([200n, 0n, 40n]);
+    expect(planShare(100n, [200n, 0n, 40n]).reduce((a, b) => a + b, 0n)).toBe(100n);
+    // Fifty tiny pools can each give nothing, so one unit owed stays owed.
+    const tiny = monthlyCaps(Array.from({ length: 50 }, () => 1n), [], 20_000);
+    expect(planShare(1n, tiny).every((part) => part === 0n)).toBe(true);
+    for (let seed = 1; seed < 200; seed++) {
+      const random = seeded(seed);
+      const caps = Array.from({ length: 1 + Math.floor(random() * 8) }, () => BigInt(Math.floor(random() * 50)));
+      const parts = planShare(BigInt(Math.floor(random() * 400)), caps);
+      parts.forEach((part, i) => expect(part <= caps[i]!).toBe(true));
+    }
   });
 });
 

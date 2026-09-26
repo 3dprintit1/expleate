@@ -30,7 +30,7 @@ The words on the site shape how people think about what they are doing.
 | put in, contribution | invest, donate, back, fund |
 | take back, your portion | withdraw, refund, cash out, return |
 | people in the pool | investors, backers, donors, customers |
-| stewards, the people looking after it | owners, founders, creators |
+| hosts | owners, founders, creators |
 | uses | expenses, spending |
 | running costs | fees, platform charge |
 | members, people | users, customers, audience |

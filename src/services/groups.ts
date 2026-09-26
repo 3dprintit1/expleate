@@ -1,5 +1,5 @@
 /**
- * Groups let people suggest and look after projects together. Everyone in a
+ * Groups let people suggest and host projects together. Everyone in a
  * group is equal: there are no owners or admins, and any member can invite.
  */
 import { newId } from '../core/crypto.js';
@@ -150,7 +150,7 @@ export function leaveGroup(ctx: Context, groupId: string, memberId: string): voi
     );
     if ((count?.n ?? 0) <= 1 && (active?.n ?? 0) > 0) {
       throw new Problem(
-        'You are the last person in this group and it still looks after a project. Invite someone else first, or finish the project.',
+        "You're the last person in this group, and it still hosts a project. Invite someone else first, or finish the project.",
         409,
       );
     }

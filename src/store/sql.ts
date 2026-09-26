@@ -21,7 +21,9 @@ export interface Sql {
   all<T = Row>(sql: string, ...params: SqlValue[]): T[];
   /**
    * Runs `fn` in a transaction: all of its writes happen, or none do. `fn`
-   * must be synchronous. Nested calls join the outer transaction.
+   * must be synchronous. Nested calls join the outer transaction, so never
+   * catch an error inside a transaction and carry on: the writes made before
+   * it would still be committed with the outer transaction.
    */
   transaction<T>(fn: () => T): T;
 }

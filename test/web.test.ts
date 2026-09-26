@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderDocs } from '../scripts/build-docs.js';
+import { hashPassword, passwordProof } from '../src/core/crypto.js';
+import { passwordSalt } from '../src/services/members.js';
 import { createApp } from '../src/web/app.js';
+import { EDGE_HEADERS } from '../src/web/edge.js';
 import { testContext, type TestContext } from './helpers.js';
 
 type App = ReturnType<typeof createApp>;
@@ -80,6 +83,7 @@ async function proposed(browser: Browser, fields: Record<string, string | string
     story: STORY,
     plans: 'Two big flasks, a camping stove, tea, bread and a pile of spare towels.',
     spirits: ['joy', 'adventure'],
+    hope: '300',
     agreed: 'yes',
     ...fields,
   });
@@ -91,7 +95,7 @@ describe('the site', () => {
   it('shows the projects page with protective headers', async () => {
     const response = await new Browser(app).get('/');
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('Pool resources with anyone in the world');
+    expect(await response.text()).toContain('Pool together for things that bring joy.');
     expect(response.headers.get('content-security-policy')).toContain("script-src 'none'");
     expect(response.headers.get('x-frame-options')).toBe('SAMEORIGIN');
   });
@@ -112,13 +116,14 @@ describe('the site', () => {
     expect((await browser.get('/nowhere')).status).toBe(404);
     expect((await browser.get('/projects/nothing-here')).status).toBe(404);
     expect((await browser.get('/api/nowhere')).status).toBe(404);
+    expect((await browser.get('/api/projects?page=1e20')).status).toBe(200);
   });
 });
 
 describe('accounts', () => {
   it('joins, signs out and signs back in', async () => {
     const browser = await joined('amara');
-    expect(await browser.text('/me')).toContain('Your resources');
+    expect(await browser.text('/me')).toContain('ready to put in');
     await browser.post('/sign-out', {});
     expect((await browser.get('/me')).headers.get('location')).toBe('/sign-in?next=%2Fme');
     const bad = await browser.post('/sign-in', { handle: 'amara', password: 'not the password', next: '/me' });
@@ -131,6 +136,61 @@ describe('accounts', () => {
     const response = await new Browser(app).post('/join', { handle: 'x', name: 'X', password: 'pool together please' });
     expect(response.status).toBe(400);
     expect(await response.text()).toContain('Handles are 3 to 24 characters long');
+  });
+});
+
+describe('password checks at the edge', () => {
+  it('trusts the edge’s work only when told it sits behind the Worker', async () => {
+    const edgeApp = createApp({ context: ctx, edgeAuth: true });
+    const edge = new Browser(edgeApp);
+    await edge.get('/join');
+    const token = decodeURIComponent(edge.cookies.get('csrf')!);
+    const form = (fields: Record<string, string>) => new URLSearchParams({ _csrf: token, ...fields });
+    const cookie = () => [...edge.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+
+    // Joining: the edge hashed the password, so the Commons stores that hash.
+    const hash = await hashPassword('pool together please');
+    const joined = await edgeApp.request('/join', {
+      method: 'POST',
+      body: form({ handle: 'amara', name: 'Amara', password: 'pool together please' }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie(), [EDGE_HEADERS.passwordHash]: hash },
+    });
+    expect(joined.headers.get('location')).toBe('/me');
+    expect(ctx.sql.get<{ password_hash: string }>("SELECT password_hash FROM members WHERE handle = 'amara'")?.password_hash).toBe(hash);
+
+    // Signing in: the edge derived the key from the password and the stored salt.
+    const { salt, iterations } = passwordSalt(ctx, 'amara');
+    const signIn = (proof: string) =>
+      edgeApp.request('/sign-in', {
+        method: 'POST',
+        body: form({ handle: 'amara', password: '', next: '/me' }),
+        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie(), [EDGE_HEADERS.passwordProof]: proof },
+      });
+    expect((await signIn(await passwordProof('pool together please', salt, iterations))).status).toBe(303);
+    expect((await signIn(await passwordProof('not my password', salt, iterations))).status).toBe(401);
+
+    // Too many tries: the edge asks people to slow down.
+    const slow = await edgeApp.request('/sign-in', {
+      method: 'POST',
+      body: form({ handle: 'amara', password: 'pool together please', next: '/me' }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie(), [EDGE_HEADERS.slowDown]: '1' },
+    });
+    expect(await slow.text()).toContain('Too many tries');
+  });
+
+  it('ignores those headers when not behind the Worker', async () => {
+    const browser = await joined('kenji');
+    await browser.post('/sign-out', {});
+    const response = await app.request('/sign-in', {
+      method: 'POST',
+      body: new URLSearchParams({ _csrf: decodeURIComponent(browser.cookies.get('csrf')!), handle: 'kenji', password: 'wrong', next: '/me' }),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: `csrf=${browser.cookies.get('csrf')}`,
+        [EDGE_HEADERS.passwordProof]: 'AAAA',
+      },
+    });
+    expect(response.status).toBe(401);
   });
 });
 
@@ -147,6 +207,24 @@ describe('forms', () => {
     const browser = await joined('amara');
     await browser.post('/me/add', { amount: '100' }, { origin: 'https://elsewhere.example' });
     expect(ctx.sql.get<{ balance: number }>("SELECT balance FROM members WHERE handle = 'amara'")?.balance).toBe(0);
+  });
+
+  it('never redirects anywhere but this site', async () => {
+    const browser = await joined('amara');
+    for (const next of ['/%09/evil.example', '//evil.example', '/\\evil.example', 'https://evil.example', '/%0a/evil.example']) {
+      const response = await browser.get(`/sign-in?next=${next}`);
+      expect(response.headers.get('location'), next).toBe('/me');
+    }
+    // A form that fails from a path starting with // goes back home, not off site.
+    const response = await browser.post('//evil.example/x', {}, { token: 'forged-token-forged-token' });
+    expect(response.headers.get('location')).not.toMatch(/^\/\//);
+  });
+
+  it('accepts a long story in any script', async () => {
+    const amara = await joined('amara');
+    const story = '夏至の夜、みんなで紙の灯籠を作り、音楽と一緒に旧市街を歩きます。'.repeat(250).slice(0, 9_000);
+    const path = await proposed(amara, { story });
+    expect(await amara.text(path)).toContain('夏至の夜');
   });
 
   it('sends people who are not signed in to sign in first', async () => {
@@ -196,12 +274,13 @@ describe('pooling through the site', () => {
       story: `${STORY} Then we film The Nebula Wars on the moors.`,
       plans: 'Cardboard, paint, a smoke machine and a projector for the premiere.',
       spirits: 'creativity',
+      hope: '700',
       agreed: 'yes',
     };
     const first = await mateo.post('/projects', fields);
     expect(first.status).toBe(400);
     const text = await first.text();
-    expect(text).toContain('A few words caught the charter check');
+    expect(text).toContain('Some words need a second look');
     expect(text).toContain('war or the military');
 
     const second = await mateo.post('/projects', {
@@ -209,7 +288,7 @@ describe('pooling through the site', () => {
       concernNote: 'It is a made-up film with cardboard spaceships and has nothing to do with real war.',
     });
     expect(second.status).toBe(303);
-    expect(await mateo.text(second.headers.get('location')!)).toContain('Waiting for its charter circle');
+    expect(await mateo.text(second.headers.get('location')!)).toContain('Waiting for its circle');
   });
 });
 

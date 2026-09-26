@@ -9,7 +9,10 @@ import { type Tally, type Verdict, decision, decisionAtDeadline, drawCircle, isV
 import { newId } from '../core/crypto.js';
 import { type Context, Problem, addDays, cleanText, nowIso } from './context.js';
 import { settlePool } from './pools.js';
-import { type Project, isSteward, queryProjects, requireProject, stewardIds } from './records.js';
+import { type Project, isHost, queryProjects, requireProject, hostIds } from './records.js';
+
+/** How long people who flagged a project wait before flagging it again, once a circle has found it fits. */
+export const FLAG_AGAIN_DAYS = 30;
 
 export interface Review {
   readonly id: string;
@@ -34,11 +37,11 @@ function requireReview(ctx: Context, id: string): Review {
 
 /**
  * Everyone who could sit in this circle: any member except the project's
- * stewards, people who have had a portion in its pool, people who flagged it,
+ * hosts, people who have had a portion in its pool, people who flagged it,
  * and anyone already seated.
  */
 function eligibleMembers(ctx: Context, reviewId: string, project: Project): string[] {
-  const excluded = new Set(stewardIds(ctx, project));
+  const excluded = new Set(hostIds(ctx, project));
   const add = (rows: Array<{ member_id: string }>) => rows.forEach((row) => excluded.add(row.member_id));
   add(ctx.sql.all('SELECT member_id FROM portions WHERE project_id = ?', project.id));
   add(ctx.sql.all('SELECT member_id FROM flags WHERE project_id = ? AND settled = 0', project.id));
@@ -102,11 +105,30 @@ export function flagProject(ctx: Context, projectId: string, memberId: string, r
       throw new Problem('A charter circle is already looking at this project.', 409);
     }
     if (project.status !== 'open') throw new Problem('This project has finished.', 409);
-    if (isSteward(ctx, project, memberId)) {
-      throw new Problem('You look after this project, so you cannot flag it.', 403);
+    if (isHost(ctx, project, memberId)) {
+      throw new Problem("You host this project, so you can't flag it.", 403);
     }
     if (ctx.sql.get('SELECT 1 FROM flags WHERE project_id = ? AND member_id = ? AND settled = 0', projectId, memberId)) {
       throw new Problem('You have already flagged this project.', 409);
+    }
+    // Once a circle has found that a project fits, the people who flagged it
+    // wait a while before flagging it again, so a few accounts cannot keep a
+    // project paused. Anyone else can still flag it.
+    const lastFits = ctx.sql.get<{ decided_at: string }>(
+      `SELECT r.decided_at FROM flags f JOIN reviews r ON r.id = f.review_id
+        WHERE f.project_id = ? AND f.member_id = ? AND r.outcome = 'fits'
+        ORDER BY r.decided_at DESC LIMIT 1`,
+      projectId,
+      memberId,
+    );
+    if (lastFits) {
+      const again = addDays(new Date(lastFits.decided_at), FLAG_AGAIN_DAYS);
+      if (again > ctx.now()) {
+        throw new Problem(
+          `A circle found this project fits after you flagged it. You can flag it again from ${again.toISOString().slice(0, 10)}.`,
+          409,
+        );
+      }
     }
     ctx.sql.run(
       'INSERT INTO flags (id, project_id, member_id, rule, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -186,6 +208,7 @@ export function castVote(
   return ctx.sql.transaction(() => {
     const review = requireReview(ctx, reviewId);
     if (review.status !== 'open') throw new Problem('This circle has already decided.', 409);
+    if (review.deadline_at <= nowIso(ctx)) throw new Problem('This circle’s time is up.', 409);
     const seat = ctx.sql.get<{ vote: string | null }>(
       'SELECT vote FROM seats WHERE review_id = ? AND member_id = ?',
       reviewId,
@@ -224,7 +247,7 @@ export function settleDueReviews(ctx: Context): number {
   return due.length;
 }
 
-/** Closes any open review when a project's stewards stop it. Call inside a transaction. */
+/** Closes any open review when a project's hosts stop it. Call inside a transaction. */
 export function withdrawReviews(ctx: Context, projectId: string): void {
   ctx.sql.run(
     "UPDATE reviews SET status = 'withdrawn', decided_at = ? WHERE project_id = ? AND status = 'open'",

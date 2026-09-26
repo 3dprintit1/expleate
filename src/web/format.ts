@@ -46,15 +46,34 @@ export function checked(form: Form, name: string): boolean {
   return field(form, name) !== '';
 }
 
-/** Reads an amount from a form, or explains what is wrong with it. */
+/**
+ * Reads an amount from a form, or explains what is wrong with it. A typed
+ * amount wins over a one-tap choice, so people can always say exactly what
+ * they mean.
+ */
 export function amountField(config: Config, form: Form, name = 'amount'): bigint {
-  const result = parseAmount(field(form, name), config.currency);
+  const text = field(form, name).trim() || field(form, 'preset').trim();
+  if (text === '') throw new Problem('Choose or type an amount.', 400, name);
+  const result = parseAmount(text, config.currency);
   if (!result.ok) throw new Problem(result.reason, 400, name);
   return result.amount;
 }
 
-/** Only ever redirect to a path on this site. */
+const HERE = 'https://here.invalid';
+
+/**
+ * Only ever redirect to a path on this site. Browsers quietly drop tabs and
+ * newlines and treat backslashes as slashes, so "/\t/elsewhere" would leave
+ * the site. Anything like that is refused, and what is left is resolved
+ * against this site and must stay on it.
+ */
 export function safeNext(value: string | undefined, fallback = '/'): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return fallback;
-  return value;
+  if (!value || !value.startsWith('/') || /[\u0000- \u007f- \\]/.test(value)) return fallback;
+  try {
+    const url = new URL(value, HERE);
+    if (url.origin !== HERE || url.pathname.startsWith('//')) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
 }

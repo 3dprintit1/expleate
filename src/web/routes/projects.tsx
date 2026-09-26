@@ -23,26 +23,34 @@ import {
   projectUpdates,
   proposeProject,
 } from '../../services/projects.js';
-import { type Project, isSteward, requireProject } from '../../services/records.js';
+import { type Project, isHost, requireProject } from '../../services/records.js';
 import { flagProject, reviewsForProject } from '../../services/reviews.js';
 import {
+  AmountChoice,
   Csrf,
   ErrorSummary,
+  Gauge,
   Hint,
+  Icon,
   Paragraphs,
   ProjectCard,
   SPIRIT_NAMES,
   STATUS_NAMES,
   SpiritTags,
+  StatusBadge,
+  gathered,
+  hostOf,
   page,
-  stewardOf,
+  putInPresets,
 } from '../components.js';
 import type { AppEnv, Form } from '../env.js';
-import { amountField, checked, day, field, fields, money, percent, plural } from '../format.js';
+import { amountField, checked, day, field, fields, money, plural } from '../format.js';
 import { signedIn } from '../guards.js';
 import { flash } from '../session.js';
 
 export const projects = new Hono<AppEnv>();
+
+// ---------------------------------------------------------------- the home page
 
 const ORDERS: Record<ListOrder, string> = { shuffled: 'Shuffled daily', newest: 'Newest', people: 'Most people' };
 
@@ -55,42 +63,75 @@ projects.get('/', (c) => {
   const show: ListShow = c.req.query('show') === 'finished' ? 'finished' : 'live';
   const pageNumber = Math.max(0, Math.min(1000, Number.parseInt(c.req.query('page') ?? '0', 10) || 0));
   const { projects: list, more } = listProjects(ctx, { spirit, order, show, page: pageNumber });
+  const firstView = pageNumber === 0 && !spirit && show === 'live' && order === 'shuffled';
 
   const link = (changes: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams();
-    const merged = { spirit, order: order === 'shuffled' ? undefined : order, show: show === 'live' ? undefined : show, page: undefined, ...changes };
+    const merged = {
+      spirit,
+      order: order === 'shuffled' ? undefined : order,
+      show: show === 'live' ? undefined : show,
+      page: undefined,
+      ...changes,
+    };
     for (const [key, value] of Object.entries(merged)) if (value !== undefined) params.set(key, String(value));
     const query = params.toString();
-    return query ? `/?${query}` : '/';
+    return `${query ? `/?${query}` : '/'}#projects`;
   };
 
   return page(
     c,
     ctx.config.siteName,
     <>
-      {pageNumber === 0 && !spirit && show === 'live' && (
-        <section class="hero">
-          <h1>Pool resources with anyone in the world, for projects of creativity, adventure and joy.</h1>
-          <p>
-            Someone suggests a project. Anyone who loves the idea can put in whatever they like. If you stop liking where
-            it is heading, you can take your portion back at any time.
-          </p>
-          <p>
-            {ctx.config.siteName} is built as though everyone already had an equal share of the world’s resources. Nobody
-            profits here, and nobody’s voice counts for more than anyone else’s.
-          </p>
-          <p class="actions">
-            <a class="button" href="/projects/new">
-              Suggest a project
-            </a>
-            <a href="/pooling">How pooling works</a>
-          </p>
-        </section>
+      {firstView && (
+        <>
+          <section class="hero">
+            <div>
+              <h1>Pool together for things that bring joy.</h1>
+              <p class="lead">
+                Suggest a project, or put something into one you love. If you change your mind, take your portion back.
+                Nobody makes a profit.
+              </p>
+              <div class="actions">
+                <a class="button" href="#projects">
+                  Explore projects
+                </a>
+                <a class="button ghost" href="/projects/new">
+                  Suggest a project
+                </a>
+              </div>
+              <p class="worldview">
+                Built as if everyone already had an equal share of the world. <a href="/charter">Read the charter</a>
+              </p>
+            </div>
+            <div class="hero-pool" aria-hidden="true">
+              <Gauge id="hero" fraction={0.62} label="" />
+            </div>
+          </section>
+          <ol class="steps" aria-label="How it works">
+            <li class="glass">
+              <Icon name="sprout" />
+              Someone suggests a project.
+            </li>
+            <li class="glass">
+              <Icon name="drop" />
+              Anyone puts in what they like.
+            </li>
+            <li class="glass">
+              <Icon name="ripple" />
+              Every use of the pool is public.
+            </li>
+            <li class="glass">
+              <Icon name="return" />
+              Leave any time with your portion.
+            </li>
+          </ol>
+        </>
       )}
-      <section>
-        <h2>{show === 'finished' ? 'Finished projects' : 'Projects'}</h2>
-        <nav class="filters" aria-label="Filter projects">
-          <span>
+      <section id="projects">
+        <div class="toolbar">
+          <h2>{show === 'finished' ? 'Finished projects' : 'Projects'}</h2>
+          <nav class="filters" aria-label="Show projects about">
             <a href={link({ spirit: undefined })} aria-current={!spirit ? 'page' : undefined}>
               All
             </a>
@@ -99,28 +140,15 @@ projects.get('/', (c) => {
                 {SPIRIT_NAMES[s]}
               </a>
             ))}
-          </span>
-          <span>
-            {(Object.keys(ORDERS) as ListOrder[]).map((o) => (
-              <a href={link({ order: o === 'shuffled' ? undefined : o })} aria-current={order === o ? 'page' : undefined}>
-                {ORDERS[o]}
-              </a>
-            ))}
-          </span>
-          <span>
-            <a href={link({ show: undefined })} aria-current={show === 'live' ? 'page' : undefined}>
-              Live
-            </a>
-            <a href={link({ show: 'finished' })} aria-current={show === 'finished' ? 'page' : undefined}>
-              Finished
-            </a>
-          </span>
-        </nav>
+          </nav>
+        </div>
         {list.length === 0 ? (
-          <p class="empty">
-            {show === 'finished' ? 'No finished projects yet.' : 'No projects here yet.'}{' '}
-            <a href="/projects/new">Suggest one?</a>
-          </p>
+          <div class="empty glass">
+            <p>{show === 'finished' ? 'No finished projects yet.' : 'Nothing here yet.'}</p>
+            <a class="button" href="/projects/new">
+              Suggest the first one
+            </a>
+          </div>
         ) : (
           <ul class="cards">
             {list.map((project) => (
@@ -129,18 +157,41 @@ projects.get('/', (c) => {
           </ul>
         )}
         <p class="pager">
-          {pageNumber > 0 && <a href={link({ page: pageNumber - 1 || undefined })}>Previous</a>}
-          {more && <a href={link({ page: pageNumber + 1 })}>More projects</a>}
+          {pageNumber > 0 && (
+            <a class="button ghost" href={link({ page: pageNumber - 1 || undefined })}>
+              Previous
+            </a>
+          )}
+          {more && (
+            <a class="button ghost" href={link({ page: pageNumber + 1 })}>
+              More projects
+            </a>
+          )}
         </p>
-        {order === 'shuffled' && list.length > 1 && (
-          <p class="quiet">The order is shuffled once a day, so every project takes its turn near the top.</p>
-        )}
+        <p class="faint">
+          {(Object.keys(ORDERS) as ListOrder[]).map((o, index) => (
+            <>
+              {index > 0 && ' · '}
+              {order === o ? (
+                <strong>{ORDERS[o]}</strong>
+              ) : (
+                <a href={link({ order: o === 'shuffled' ? undefined : o })}>{ORDERS[o]}</a>
+              )}
+            </>
+          ))}
+          {' · '}
+          {show === 'finished' ? (
+            <a href={link({ show: undefined })}>Live projects</a>
+          ) : (
+            <a href={link({ show: 'finished' })}>Finished projects</a>
+          )}
+        </p>
       </section>
     </>,
   );
 });
 
-// ---------------------------------------------------------------- suggesting
+// ---------------------------------------------------------------- suggesting a project
 
 interface ProposeFormProps {
   c: HonoContext<AppEnv>;
@@ -154,86 +205,102 @@ const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
   const member = c.get('member')!;
   const groups = memberGroups(ctx, member.id);
   const chosen = new Set(fields(form, 'spirits'));
+  const topics = concerns
+    ? new Intl.ListFormat('en-GB', { type: 'disjunction' }).format([
+        ...new Set(concerns.map((concern) => ruleById(concern.rule)?.topic ?? concern.rule)),
+      ])
+    : '';
   return (
     <section class="narrow">
       <h1>Suggest a project</h1>
-      <p>
-        Tell people what you want to do and what the pool would be for. Projects are shared acts of creativity, adventure
-        or joy. Please read <a href="/charter">the charter</a> first: projects have nothing to do with politics, war,
-        financial gain or charity.
+      <p class="lead">Something people can make, explore or enjoy together.</p>
+      <p class="faint">
+        It can’t involve politics, war, profit or charity. <a href="/charter">Read the charter</a>
       </p>
       <ErrorSummary message={error} />
-      {concerns && concerns.length > 0 && (
-        <div class="concerns" role="alert">
-          <h2>A few words caught the charter check</h2>
-          <p>
-            The check is only a first look at the words you used. It found these, which often mean a project is about{' '}
-            {new Intl.ListFormat('en-GB', { type: 'disjunction' }).format([
-              ...new Set(concerns.map((concern) => ruleById(concern.rule)?.topic ?? concern.rule)),
-            ])}
-            :
-          </p>
-          <ul>
-            {concerns.map((concern) => (
-              <li>
-                <strong>“{concern.term}”</strong> ({ruleById(concern.rule)?.title}) in “{concern.excerpt}”
-              </li>
-            ))}
-          </ul>
-          <p>
-            If that is a misunderstanding, you can reword it. Or explain below why the project still fits the charter, and
-            a charter circle of people drawn at random will read your explanation and decide. Your pool opens if they agree.
-          </p>
-          <label for="concernNote">Why your project fits the charter</label>
-          <textarea id="concernNote" name="concernNote" rows={4} maxlength={2000}>
-            {field(form, 'concernNote')}
-          </textarea>
-        </div>
-      )}
-      <form method="post" action="/projects" class="stack">
+      <form method="post" action="/projects" class="form glass panel">
         <Csrf c={c} />
+        {concerns && concerns.length > 0 && (
+          <div class="note" role="alert">
+            <h2>Some words need a second look</h2>
+            <p>These often mean a project is about {topics}:</p>
+            <ul>
+              {concerns.map((concern) => (
+                <li>
+                  <strong>“{concern.term}”</strong> in “{concern.excerpt}”
+                </li>
+              ))}
+            </ul>
+            <p>
+              Reword them, or tell us why the project fits. A circle of people picked at random will read your reason and
+              decide.
+            </p>
+            <label class="label" for="concernNote">
+              Why it fits
+            </label>
+            <textarea id="concernNote" name="concernNote" rows={3} maxlength={2000}>
+              {field(form, 'concernNote')}
+            </textarea>
+            <input type="hidden" name="concernNoteShown" value="yes" />
+          </div>
+        )}
+
         <label for="title">Title</label>
-        <input id="title" name="title" required maxlength={100} value={field(form, 'title')} />
+        <input
+          id="title"
+          name="title"
+          required
+          maxlength={100}
+          placeholder="A mural of every bird in the valley"
+          value={field(form, 'title')}
+        />
 
         <label for="summary">In one line</label>
-        <Hint>What would someone see at a glance?</Hint>
-        <input id="summary" name="summary" required maxlength={200} value={field(form, 'summary')} />
+        <input
+          id="summary"
+          name="summary"
+          required
+          maxlength={200}
+          placeholder="Painting all 64 birds seen in our valley"
+          value={field(form, 'summary')}
+        />
 
-        <label for="story">The story</label>
-        <Hint>What will happen, who can take part, and why it brings joy. At least 50 characters.</Hint>
-        <textarea id="story" name="story" required rows={8} maxlength={10000}>
+        <label for="story">What will happen?</label>
+        <Hint>Who can join in, and why it will be a joy.</Hint>
+        <textarea id="story" name="story" required rows={7} maxlength={10000}>
           {field(form, 'story')}
         </textarea>
 
-        <label for="plans">What the pool is for</label>
-        <Hint>
-          The things the project needs: materials, tools, travel, a venue. Nobody is paid a wage or fee from a pool.
-        </Hint>
-        <textarea id="plans" name="plans" required rows={5} maxlength={5000}>
+        <label for="plans">What will the pool pay for?</label>
+        <Hint>Materials, tools, travel, a place. Never wages.</Hint>
+        <textarea id="plans" name="plans" required rows={4} maxlength={5000}>
           {field(form, 'plans')}
         </textarea>
 
-        <fieldset>
-          <legend>Its spirit</legend>
-          {SPIRITS.map((spirit) => (
-            <label class="check">
-              <input type="checkbox" name="spirits" value={spirit} checked={chosen.has(spirit)} /> {SPIRIT_NAMES[spirit]}
-            </label>
-          ))}
-        </fieldset>
+        <label for="hope">How much do you hope to gather?</label>
+        <Hint>A rough guess is fine.</Hint>
+        <input id="hope" name="hope" class="amount" inputmode="decimal" required maxlength={30} value={field(form, 'hope')} />
 
-        <label for="hope">What you hope to pool (optional)</label>
-        <Hint>A rough idea helps people know when the project has enough.</Hint>
-        <input id="hope" name="hope" inputmode="decimal" maxlength={30} value={field(form, 'hope')} />
+        <fieldset>
+          <legend class="label">Its spirit</legend>
+          <div class="chips">
+            {SPIRITS.map((spirit) => (
+              <label class="chip">
+                <input type="checkbox" name="spirits" value={spirit} checked={chosen.has(spirit)} />
+                <span>{SPIRIT_NAMES[spirit]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         {groups.length > 0 && (
           <>
-            <label for="groupId">Suggest it as</label>
+            <label for="groupId">Host it as</label>
             <select id="groupId" name="groupId">
               <option value="">Yourself</option>
               {groups.map((group) => (
                 <option value={group.id} selected={field(form, 'groupId') === group.id}>
-                  {group.name} (everyone in the group looks after it)
+                  {group.name}
                 </option>
               ))}
             </select>
@@ -241,11 +308,10 @@ const ProposeForm: FC<ProposeFormProps> = ({ c, form, error, concerns }) => {
         )}
 
         <label class="check">
-          <input type="checkbox" name="agreed" value="yes" checked={checked(form, 'agreed')} required /> I have read the
-          charter, and this project fits it.
+          <input type="checkbox" name="agreed" value="yes" checked={checked(form, 'agreed')} required />
+          <span>It fits the charter.</span>
         </label>
-        {concerns && concerns.length > 0 && <input type="hidden" name="concernNoteShown" value="yes" />}
-        <button type="submit">{concerns && concerns.length > 0 ? 'Send to a charter circle' : 'Suggest it'}</button>
+        <button type="submit">{concerns && concerns.length > 0 ? 'Send to a circle' : 'Suggest it'}</button>
       </form>
     </section>
   );
@@ -259,37 +325,26 @@ projects.post('/projects', signedIn, (c) => {
   const form = c.get('form');
   try {
     const hopeText = field(form, 'hope').trim();
-    let hope: bigint | null = null;
-    if (hopeText !== '') {
-      const parsed = parseAmount(hopeText, ctx.config.currency);
-      if (!parsed.ok) throw new Problem(`What you hope to pool: ${parsed.reason}`, 400, 'hope');
-      hope = parsed.amount;
-    }
+    if (hopeText === '') throw new Problem('How much do you hope to gather? A rough guess is fine.', 400, 'hope');
+    const hope = parseAmount(hopeText, ctx.config.currency);
+    if (!hope.ok) throw new Problem(`How much you hope to gather: ${hope.reason}`, 400, 'hope');
     const input: ProposalInput = {
       title: field(form, 'title'),
       summary: field(form, 'summary'),
       story: field(form, 'story'),
       plans: field(form, 'plans'),
       spirits: fields(form, 'spirits'),
-      hope,
+      hope: hope.amount,
       groupId: field(form, 'groupId') || null,
       concernNote: field(form, 'concernNote'),
       agreed: checked(form, 'agreed'),
     };
     const result = proposeProject(ctx, member.id, input);
     if (result.kind === 'concerns') {
-      const error = field(form, 'concernNoteShown')
-        ? 'Please write at least a sentence or two (20 characters or more) explaining why it fits.'
-        : undefined;
+      const error = field(form, 'concernNoteShown') ? 'Please give a reason of at least 20 characters.' : undefined;
       return page(c, 'Suggest a project', <ProposeForm c={c} form={form} concerns={result.concerns} error={error} />, 400);
     }
-    flash(
-      c,
-      'ok',
-      result.project.status === 'open'
-        ? 'Your project is live and its pool is open.'
-        : 'Thank you. A charter circle has been drawn to read your explanation.',
-    );
+    flash(c, 'ok', result.project.status === 'open' ? 'Your project is live.' : 'Thanks. A circle has been picked to read your reason.');
     return c.redirect(`/projects/${result.project.id}`, 303);
   } catch (error) {
     if (error instanceof Problem && error.status === 400) {
@@ -301,124 +356,118 @@ projects.post('/projects', signedIn, (c) => {
 
 // ---------------------------------------------------------------- one project
 
-const PoolBox: FC<{ c: HonoContext<AppEnv>; project: Project; steward: boolean }> = ({ c, project, steward }) => {
+const PoolCard: FC<{ c: HonoContext<AppEnv>; project: Project }> = ({ c, project }) => {
   const ctx = c.get('ctx');
   const { config } = ctx;
   const member = c.get('member');
   const portion = member ? portionFor(ctx, project, member.id) : undefined;
   const people = poolPeople(ctx, project);
-  const pooledSoFar = project.pool_balance + project.pool_used + project.pool_costs;
+  const sofar = gathered(project);
   const live = project.status === 'open' || project.status === 'review';
   const others = people.total - people.named.length;
+  const kept = portion ? portion.putIn - portion.takenBack - portion.returned : 0n;
+  const shrunk = portion ? kept - portion.value > 1n : false;
 
   return (
-    <aside class="pool" aria-labelledby="pool-heading">
-      <h2 id="pool-heading">The pool</h2>
-      <dl class="figures">
-        <div>
-          <dt>In the pool now</dt>
-          <dd>{money(config, project.pool_balance)}</dd>
-        </div>
-        <div>
-          <dt>Used for the project</dt>
-          <dd>{money(config, project.pool_used)}</dd>
-        </div>
-        {project.pool_costs > 0 && (
-          <div>
-            <dt>
-              <a href="/costs">Running costs</a> shared
-            </dt>
-            <dd>{money(config, project.pool_costs)}</dd>
-          </div>
-        )}
-        {project.pool_returned > 0 && (
-          <div>
-            <dt>Handed back at the end</dt>
-            <dd>{money(config, project.pool_returned)}</dd>
-          </div>
-        )}
-        <div>
-          <dt>People in the pool</dt>
-          <dd>{people.total.toLocaleString('en-GB')}</dd>
-        </div>
-      </dl>
+    <aside class="pool glass" aria-label="The pool">
       {project.hope !== null && (
-        <p class="hope">
-          <progress max={project.hope} value={Math.min(pooledSoFar, project.hope)}>
-            {percent(config, pooledSoFar / project.hope)}
-          </progress>
-          {money(config, pooledSoFar)} pooled of the {money(config, project.hope)} they hope for.
-        </p>
+        <Gauge
+          id={project.id}
+          fraction={sofar / project.hope}
+          label={`${money(config, sofar)} of ${money(config, project.hope)} gathered`}
+        />
       )}
+      <div class="pool-figure">
+        <span class="big">{money(config, project.pool_balance)}</span>
+        <span class="quiet">in the pool</span>
+        <p class="pool-facts">
+          <span>{plural(people.total, 'person', 'people')}</span>
+          {project.pool_used > 0 && <span>{money(config, project.pool_used)} used</span>}
+          {project.pool_costs > 0 && <span>{money(config, project.pool_costs)} running costs</span>}
+          {project.pool_returned > 0 && <span>{money(config, project.pool_returned)} handed back</span>}
+        </p>
+        {project.hope !== null && (
+          <p class="faint">
+            {money(config, sofar)} of {money(config, project.hope)} gathered
+          </p>
+        )}
+      </div>
       {people.named.length > 0 && (
-        <p class="people">
-          In this pool:{' '}
+        <p class="faint">
+          With{' '}
           {people.named.map((person, index) => (
             <>
               {index > 0 && ', '}
               <a href={`/people/${person.handle}`}>{person.name}</a>
             </>
           ))}
-          {others > 0 && ` and ${plural(others, 'other', 'others')}`}.
+          {others > 0 && ` and ${plural(others, 'other', 'others')}`}
         </p>
-      )}
-
-      {portion && (portion.value > 0n || live) && portion.putIn > 0n && (
-        <div class="yours">
-          <h3>Your portion</h3>
-          <p class="big">{money(config, portion.value)}</p>
-          <p>
-            You put in {money(config, portion.putIn)}
-            {portion.takenBack > 0n && `, and have taken back ${money(config, portion.takenBack)}`}
-            {portion.returned > 0n && `, and ${money(config, portion.returned)} was handed back when it ended`}.
-            {portion.firstFraction !== null &&
-              ` When you first put something in, you brought ${percent(config, portion.firstFraction)} of the pool.`}
-          </p>
-          {live && portion.value > 0n && (
-            <form method="post" action={`/projects/${project.id}/take-back`} class="stack">
-              <Csrf c={c} />
-              <label for="take-amount">Take back</label>
-              <Hint>Up to {money(config, portion.value)}, any time.</Hint>
-              <input id="take-amount" name="amount" inputmode="decimal" required maxlength={30} />
-              <label for="take-note">Tell the stewards why (optional, anonymous)</label>
-              <input id="take-note" name="note" maxlength={500} />
-              <button type="submit" class="secondary">
-                Take back
-              </button>
-            </form>
-          )}
-        </div>
       )}
 
       {project.status === 'open' &&
         (member ? (
-          <form method="post" action={`/projects/${project.id}/contribute`} class="stack contribute">
+          <form method="post" action={`/projects/${project.id}/contribute`} class="form">
             <Csrf c={c} />
+            <hr class="divider" />
             <h3>Put something in</h3>
-            <label for="put-amount">How much</label>
-            <Hint>You have {money(config, member.balance)} available.</Hint>
-            <input id="put-amount" name="amount" inputmode="decimal" required maxlength={30} />
+            <AmountChoice config={config} presets={putInPresets(config)} idPrefix="put" otherLabel="Or another amount" />
             <label class="check">
-              <input type="checkbox" name="showName" value="yes" checked={portion ? portion.showName : true} /> Show my
-              name among the people in this pool (never the amount)
+              <input type="checkbox" name="showName" value="yes" checked={portion ? portion.showName : true} />
+              <span>Show my name here, never the amount</span>
             </label>
             <button type="submit">Put in</button>
-            {member.balance === 0 && config.demoResources && (
-              <p class="quiet">
-                You have no resources yet. <a href="/me">Add some pretend ones</a> to try it out.
-              </p>
-            )}
+            <p class="faint">
+              You have {money(config, member.balance)} ready to put in.
+              {member.balance === 0 && config.demoResources && (
+                <>
+                  {' '}
+                  <a href="/me">Add pretend money</a>
+                </>
+              )}
+            </p>
           </form>
         ) : (
-          <p>
-            <a href={`/sign-in?next=/projects/${project.id}`}>Sign in</a> or <a href="/join">join</a> to put something in.
+          <p class="actions">
+            <a class="button" href="/join">
+              Join to put something in
+            </a>
+            <a href={`/sign-in?next=/projects/${project.id}`}>Sign in</a>
           </p>
         ))}
 
-      {project.status === 'open' && member && !steward && (
-        <p class="quiet">
-          <a href={`/projects/${project.id}/flag`}>Does this project break the charter?</a>
-        </p>
+      {portion && portion.putIn > 0n && (live || portion.value > 0n) && (
+        <div class="portion">
+          <hr class="divider" />
+          <h3>Your portion</h3>
+          <p class="big">{money(config, portion.value)}</p>
+          <p class="faint">
+            You put in {money(config, portion.putIn)}
+            {portion.takenBack > 0n && ` and took back ${money(config, portion.takenBack)}`}.
+            {shrunk && ' The project has used part of the pool, and every portion shrank by the same share.'}
+          </p>
+          {live && portion.value > 0n && (
+            <details>
+              <summary>Take some back</summary>
+              <form method="post" action={`/projects/${project.id}/take-back`} class="form">
+                <Csrf c={c} />
+                <AmountChoice
+                  config={config}
+                  presets={[]}
+                  idPrefix="take"
+                  otherLabel={`Or an amount up to ${money(config, portion.value)}`}
+                  all={{ label: `All of it, ${money(config, portion.value)}`, amount: portion.value }}
+                />
+                <label for="take-note">Tell the hosts why (optional)</label>
+                <Hint>They see the note, never your name.</Hint>
+                <input id="take-note" name="note" maxlength={500} />
+                <button type="submit" class="ghost">
+                  Take back
+                </button>
+              </form>
+            </details>
+          )}
+        </div>
       )}
     </aside>
   );
@@ -432,177 +481,201 @@ const LEDGER_WORDS = {
   return: 'Handed back',
 } as const;
 
+const HostTools: FC<{ c: HonoContext<AppEnv>; project: Project }> = ({ c, project }) => {
+  const ctx = c.get('ctx');
+  const notes = takeBackNotes(ctx, project.id);
+  return (
+    <details class="section glass host-tools">
+      <summary>Host tools</summary>
+      {project.status === 'open' && (
+        <form method="post" action={`/projects/${project.id}/use`} class="form">
+          <Csrf c={c} />
+          <h3>Record a use</h3>
+          <Hint>Everyone sees what it was for. Pools pay for the project, never for people.</Hint>
+          <label for="use-amount">Amount</label>
+          <input id="use-amount" class="amount" name="amount" inputmode="decimal" required maxlength={30} />
+          <label for="use-what">What for?</label>
+          <input id="use-what" name="description" required maxlength={500} placeholder="Twelve tins of paint" />
+          <button type="submit">Record the use</button>
+        </form>
+      )}
+      <form method="post" action={`/projects/${project.id}/updates`} class="form">
+        <Csrf c={c} />
+        <h3>Share news</h3>
+        <Hint>Tell people where the project is heading, so they can decide whether to stay in.</Hint>
+        <label for="update-body" class="visually-hidden">
+          News
+        </label>
+        <textarea id="update-body" name="body" rows={3} required maxlength={5000}></textarea>
+        <button type="submit">Share</button>
+      </form>
+      <form method="post" action={`/projects/${project.id}/finish`} class="form">
+        <Csrf c={c} />
+        <h3>Finish the project</h3>
+        <Hint>What is left in the pool goes back to everyone in it, in fair shares.</Hint>
+        <div class="choices">
+          {project.status === 'open' && (
+            <label class="choice">
+              <input type="radio" name="outcome" value="completed" required />
+              <span>It happened</span>
+            </label>
+          )}
+          <label class="choice">
+            <input type="radio" name="outcome" value="stopped" required />
+            <span>It is not going ahead</span>
+          </label>
+        </div>
+        <label for="finish-note">A last word for everyone</label>
+        <textarea id="finish-note" name="note" rows={3} required maxlength={3000}></textarea>
+        <button type="submit" class="ghost">
+          Finish
+        </button>
+      </form>
+      {notes.length > 0 && (
+        <>
+          <h3>Why people took money back</h3>
+          <ul>
+            {notes.map((note) => (
+              <li>
+                “{note.note}” <span class="faint">{day(ctx.config, note.at)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </details>
+  );
+};
+
 projects.get('/projects/:id', (c) => {
   const ctx = c.get('ctx');
   const { config } = ctx;
   const member = c.get('member');
   const project = requireProject(ctx, c.req.param('id'));
-  const steward = member ? isSteward(ctx, project, member.id) : false;
-  const by = stewardOf(ctx, project);
+  const host = member ? isHost(ctx, project, member.id) : false;
+  const by = hostOf(ctx, project);
   const updates = projectUpdates(ctx, project.id);
   const ledger = poolLedger(ctx, project.id);
   const openReview = reviewsForProject(ctx, project.id).find((review) => review.status === 'open');
-  const notes = steward ? takeBackNotes(ctx, project.id) : [];
+  const finished = project.status === 'completed' || project.status === 'stopped' || project.status === 'closed';
 
   return page(
     c,
     project.title,
-    <article class="project">
+    <article>
+      <a class="back" href="/">
+        ← All projects
+      </a>
       <header class="project-head">
-        <SpiritTags spirits={project.spirits} />
+        <div class="actions">
+          <SpiritTags spirits={project.spirits} />
+          <StatusBadge status={project.status} />
+        </div>
         <h1>{project.title}</h1>
-        <p class="summary">{project.summary}</p>
-        <p class="quiet">
-          Suggested by <a href={by.href}>{by.label}</a> on {day(config, project.created_at)}
+        <p class="lead">{project.summary}</p>
+        <p class="faint">
+          Hosted by <a href={by.href}>{by.label}</a> · {day(config, project.created_at)}
         </p>
         {project.status !== 'open' && (
-          <p class={`status-banner ${project.status}`}>
+          <p class={`status-line ${project.status}`}>
             <strong>{STATUS_NAMES[project.status]}.</strong>{' '}
             {openReview && (
               <>
-                A circle of people drawn at random is deciding whether it fits the charter.{' '}
-                <a href={`/circles/${openReview.id}`}>See the circle</a>.
+                A few people picked at random are deciding whether it fits the charter.{' '}
+                <a href={`/circles/${openReview.id}`}>See the circle</a>
               </>
             )}
-            {(project.status === 'completed' || project.status === 'stopped' || project.status === 'closed') &&
-              'Whatever was left in the pool has been handed back to the people in it.'}
+            {finished && 'What was left in the pool has gone back to the people in it.'}
           </p>
         )}
         {project.closing_note && (
-          <blockquote class="closing">
+          <blockquote>
             <Paragraphs text={project.closing_note} />
           </blockquote>
         )}
       </header>
-      <div class="columns">
+
+      <div class="layout">
+        <PoolCard c={c} project={project} />
         <div class="story">
-          <h2>The story</h2>
+          <h2>The idea</h2>
           <Paragraphs text={project.story} />
-          <h2>What the pool is for</h2>
+          <h2>What the pool pays for</h2>
           <Paragraphs text={project.plans} />
 
-          <h2>Updates</h2>
-          {updates.length === 0 ? (
-            <p class="quiet">No updates yet.</p>
-          ) : (
-            <ol class="updates">
-              {updates.map((update) => (
-                <li>
-                  <p class="quiet">
-                    <a href={`/people/${update.author_handle}`}>{update.author_name}</a>, {day(config, update.created_at)}
-                  </p>
-                  <Paragraphs text={update.body} />
-                </li>
-              ))}
-            </ol>
-          )}
-
-          <h2>The pool’s record</h2>
-          <p class="quiet">
-            Every movement in and out of this pool. Uses show what they were for. Everything else stays anonymous.
-          </p>
-          {ledger.length === 0 ? (
-            <p class="quiet">Nothing yet.</p>
-          ) : (
-            <table class="ledger">
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">What</th>
-                  <th scope="col" class="num">
-                    Amount
-                  </th>
-                  <th scope="col" class="num">
-                    Pool after
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {ledger.map((entry) => (
-                  <tr class={entry.kind}>
-                    <td>{day(config, entry.at)}</td>
-                    <td>
-                      {LEDGER_WORDS[entry.kind]}
-                      {entry.kind === 'use' && (
-                        <>
-                          : {entry.note} <span class="quiet">({entry.by})</span>
-                        </>
-                      )}
-                    </td>
-                    <td class="num">
-                      {entry.kind === 'put_in' ? '+' : '−'}
-                      {money(config, entry.amount)}
-                    </td>
-                    <td class="num">{entry.poolAfter === null ? '' : money(config, entry.poolAfter)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <PoolBox c={c} project={project} steward={steward} />
-      </div>
-
-      {steward && (project.status === 'open' || project.status === 'review' || project.status === 'awaiting') && (
-        <section class="steward-tools" aria-labelledby="steward-heading">
-          <h2 id="steward-heading">For the people looking after this project</h2>
-          {project.status === 'open' && (
-            <form method="post" action={`/projects/${project.id}/use`} class="stack">
-              <Csrf c={c} />
-              <h3>Record a use</h3>
-              <p class="quiet">
-                Everyone in the pool will see what it was for. Uses go to the project itself, never to anyone as pay.
-              </p>
-              <label for="use-amount">Amount</label>
-              <input id="use-amount" name="amount" inputmode="decimal" required maxlength={30} />
-              <label for="use-what">What it was for</label>
-              <input id="use-what" name="description" required maxlength={500} />
-              <button type="submit">Record the use</button>
-            </form>
-          )}
-          <form method="post" action={`/projects/${project.id}/updates`} class="stack">
-            <Csrf c={c} />
-            <h3>Post an update</h3>
-            <p class="quiet">Tell people how it is going and where it is heading, so they can decide whether to stay in.</p>
-            <label for="update-body">Update</label>
-            <textarea id="update-body" name="body" rows={4} required maxlength={5000}></textarea>
-            <button type="submit">Post the update</button>
-          </form>
-          <form method="post" action={`/projects/${project.id}/finish`} class="stack">
-            <Csrf c={c} />
-            <h3>Finish the project</h3>
-            <p class="quiet">Whatever is left in the pool goes back to everyone in it, in fair shares.</p>
-            <fieldset>
-              <legend>How did it end?</legend>
-              {project.status === 'open' && (
-                <label class="check">
-                  <input type="radio" name="outcome" value="completed" required /> It happened. We are done.
-                </label>
-              )}
-              <label class="check">
-                <input type="radio" name="outcome" value="stopped" required /> It is not going ahead.
-              </label>
-            </fieldset>
-            <label for="finish-note">A closing note for everyone</label>
-            <textarea id="finish-note" name="note" rows={3} required maxlength={3000}></textarea>
-            <button type="submit" class="secondary">
-              Finish the project
-            </button>
-          </form>
-          {notes.length > 0 && (
+          {updates.length > 0 && (
             <>
-              <h3>Why people took their portions back</h3>
-              <ul>
-                {notes.map((note) => (
+              <h2>News</h2>
+              <ol class="updates">
+                {updates.map((update) => (
                   <li>
-                    “{note.note}” <span class="quiet">({day(config, note.at)})</span>
+                    <p class="faint">
+                      <a href={`/people/${update.author_handle}`}>{update.author_name}</a> ·{' '}
+                      {day(config, update.created_at)}
+                    </p>
+                    <Paragraphs text={update.body} />
                   </li>
                 ))}
-              </ul>
+              </ol>
             </>
           )}
-        </section>
-      )}
+
+          <details class="section glass">
+            <summary>Every movement in and out of the pool</summary>
+            {ledger.length === 0 ? (
+              <p class="faint">Nothing yet.</p>
+            ) : (
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Date</th>
+                      <th scope="col">What</th>
+                      <th scope="col" class="num">
+                        Amount
+                      </th>
+                      <th scope="col" class="num">
+                        Pool after
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.map((entry) => (
+                      <tr>
+                        <td>{day(config, entry.at)}</td>
+                        <td>
+                          {LEDGER_WORDS[entry.kind]}
+                          {entry.kind === 'use' && (
+                            <>
+                              : {entry.note} <span class="faint">({entry.by})</span>
+                            </>
+                          )}
+                        </td>
+                        <td class="num">
+                          {entry.kind === 'put_in' ? '+' : '−'}
+                          {money(config, entry.amount)}
+                        </td>
+                        <td class="num">{entry.poolAfter === null ? '' : money(config, entry.poolAfter)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p class="faint">Names never appear here, except on uses, which show the host who recorded them.</p>
+          </details>
+
+          {host && (project.status === 'open' || project.status === 'review' || project.status === 'awaiting') && (
+            <HostTools c={c} project={project} />
+          )}
+
+          {project.status === 'open' && !host && (
+            <p class="report faint">
+              Does this project break the charter? <a href={`/projects/${project.id}/flag`}>Tell us</a>
+            </p>
+          )}
+        </div>
+      </div>
     </article>,
   );
 });
@@ -613,7 +686,7 @@ projects.post('/projects/:id/contribute', signedIn, (c) => {
   const form = c.get('form');
   const amount = amountField(ctx.config, form);
   const value = contribute(ctx, id, c.get('member')!.id, amount, checked(form, 'showName'));
-  flash(c, 'ok', `Thank you. You put in ${money(ctx.config, amount)}, and your portion is now ${money(ctx.config, value)}.`);
+  flash(c, 'ok', `Thank you. Your portion is now ${money(ctx.config, value)}.`);
   return c.redirect(`/projects/${id}`, 303);
 });
 
@@ -632,7 +705,7 @@ projects.post('/projects/:id/use', signedIn, (c) => {
   const id = c.req.param('id');
   const form = c.get('form');
   useResources(ctx, id, c.get('member')!.id, amountField(ctx.config, form), field(form, 'description'));
-  flash(c, 'ok', 'The use is recorded for everyone to see.');
+  flash(c, 'ok', 'Use recorded. Everyone can see it.');
   return c.redirect(`/projects/${id}`, 303);
 });
 
@@ -640,7 +713,7 @@ projects.post('/projects/:id/updates', signedIn, (c) => {
   const ctx = c.get('ctx');
   const id = c.req.param('id');
   postUpdate(ctx, id, c.get('member')!.id, field(c.get('form'), 'body'));
-  flash(c, 'ok', 'Your update is posted.');
+  flash(c, 'ok', 'News shared.');
   return c.redirect(`/projects/${id}`, 303);
 });
 
@@ -649,7 +722,7 @@ projects.post('/projects/:id/finish', signedIn, (c) => {
   const id = c.req.param('id');
   const form = c.get('form');
   finishProject(ctx, id, c.get('member')!.id, field(form, 'outcome'), field(form, 'note'));
-  flash(c, 'ok', 'The project is finished, and what was left in the pool has gone back to everyone in it.');
+  flash(c, 'ok', 'Project finished. What was left has gone back to everyone in the pool.');
   return c.redirect(`/projects/${id}`, 303);
 });
 
@@ -660,35 +733,45 @@ const FlagForm: FC<{ c: HonoContext<AppEnv>; project: Project; error?: string | 
   project,
   error,
   form,
-}) => (
-  <section class="narrow">
-    <h1>Does this project break the charter?</h1>
-    <p>
-      If you think <a href={`/projects/${project.id}`}>{project.title}</a> breaks <a href="/charter">the charter</a>, say
-      which part and why. When {plural(c.get('ctx').config.flagThreshold, 'person flags', 'different people flag')} a
-      project, its pool pauses and a circle of people drawn at random decides. Your name is never shown to the stewards
-      or the circle.
-    </p>
-    <ErrorSummary message={error} />
-    <form method="post" action={`/projects/${project.id}/flag`} class="stack">
-      <Csrf c={c} />
-      <fieldset>
-        <legend>Which part of the charter?</legend>
-        {RULES.map((rule) => (
-          <label class="check">
-            <input type="radio" name="rule" value={rule.id} required checked={field(form, 'rule') === rule.id} />{' '}
-            <strong>{rule.title}.</strong> {rule.summary}
-          </label>
-        ))}
-      </fieldset>
-      <label for="flag-note">Why you think so</label>
-      <textarea id="flag-note" name="note" rows={4} required maxlength={1000}>
-        {field(form, 'note')}
-      </textarea>
-      <button type="submit">Flag the project</button>
-    </form>
-  </section>
-);
+}) => {
+  const threshold = c.get('ctx').config.flagThreshold;
+  return (
+    <section class="narrow">
+      <a class="back" href={`/projects/${project.id}`}>
+        ← {project.title}
+      </a>
+      <h1>Does this break the charter?</h1>
+      <p class="lead">Tell us which rule, and why.</p>
+      <p class="faint">
+        When {plural(threshold, 'person flags', 'people flag')} a project, its pool pauses and a circle picked at random
+        decides. Nobody sees your name.
+      </p>
+      <ErrorSummary message={error} />
+      <form method="post" action={`/projects/${project.id}/flag`} class="form glass panel">
+        <Csrf c={c} />
+        <fieldset>
+          <legend class="label">Which rule?</legend>
+          <div class="choices">
+            {RULES.map((rule) => (
+              <label class="choice">
+                <input type="radio" name="rule" value={rule.id} required checked={field(form, 'rule') === rule.id} />
+                <span>
+                  <strong>{rule.title}</strong>
+                  <small>{rule.summary}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label for="flag-note">Why?</label>
+        <textarea id="flag-note" name="note" rows={3} required maxlength={1000}>
+          {field(form, 'note')}
+        </textarea>
+        <button type="submit">Flag it</button>
+      </form>
+    </section>
+  );
+};
 
 projects.get('/projects/:id/flag', signedIn, (c) => {
   const project = requireProject(c.get('ctx'), c.req.param('id'));
@@ -705,8 +788,8 @@ projects.post('/projects/:id/flag', signedIn, (c) => {
       c,
       'ok',
       result.circleDrawn
-        ? 'Thank you. Enough people have flagged this project that a charter circle has been drawn, and its pool is paused.'
-        : 'Thank you. Your flag is recorded.',
+        ? 'Thanks. Enough people have flagged it, so the pool is paused and a circle has been picked.'
+        : 'Thanks. Your flag is in.',
     );
     return c.redirect(`/projects/${project.id}`, 303);
   } catch (error) {

@@ -1,4 +1,15 @@
-import { hashPassword, newId, newSecret, sha256, verifyPassword } from '../core/crypto.js';
+import {
+  PASSWORD_ITERATIONS,
+  hashPassword,
+  newId,
+  newSecret,
+  parsePasswordHash,
+  proofMatches,
+  randomBytes,
+  sha256,
+  toBase64Url,
+  verifyPassword,
+} from '../core/crypto.js';
 import { MAX_AMOUNT } from '../core/money.js';
 import { type Context, Problem, addDays, cleanLine, nowIso } from './context.js';
 import { type Member, changeBalance, record } from './records.js';
@@ -42,16 +53,30 @@ export interface SignUpInput {
   readonly password: string;
 }
 
-export async function signUp(ctx: Context, input: SignUpInput): Promise<Member> {
+/** Checks a new password before anything slow happens to it. */
+export function checkPassword(password: string): void {
+  if (password.length < 10) throw new Problem('Passwords need at least 10 characters.', 400, 'password');
+  if (password.length > 200) throw new Problem('Passwords can be at most 200 characters.', 400, 'password');
+}
+
+/**
+ * Creates an account. On Cloudflare the password arrives already hashed by
+ * the Worker at the edge, as `passwordHash`; anywhere else it is hashed here.
+ */
+export async function signUp(ctx: Context, input: SignUpInput, passwordHash?: string): Promise<Member> {
   const handle = normaliseHandle(input.handle);
   checkHandle(handle);
   const name = cleanLine(input.name, { label: 'Your name', field: 'name', max: 60 });
-  const password = String(input.password ?? '');
-  if (password.length < 10) throw new Problem('Passwords need at least 10 characters.', 400, 'password');
-  if (password.length > 200) throw new Problem('Passwords can be at most 200 characters.', 400, 'password');
-
-  // Hash first: it takes a moment, and nothing else should wait on it.
-  const passwordHash = await hashPassword(password);
+  let hash: string;
+  if (passwordHash !== undefined) {
+    if (!parsePasswordHash(passwordHash)) throw new Error('A password hashed at the edge was not in the expected form.');
+    hash = passwordHash;
+  } else {
+    const password = String(input.password ?? '');
+    checkPassword(password);
+    // Hash first: it takes a moment, and nothing else should wait on it.
+    hash = await hashPassword(password);
+  }
 
   return ctx.sql.transaction(() => {
     if (ctx.sql.get('SELECT 1 FROM members WHERE handle = ?', handle)) {
@@ -63,14 +88,12 @@ export async function signUp(ctx: Context, input: SignUpInput): Promise<Member> 
       member.id,
       member.handle,
       member.name,
-      passwordHash,
+      hash,
       member.created_at,
     );
     return member;
   });
 }
-
-let standInHash: Promise<string> | undefined;
 
 export interface Session {
   readonly token: string;
@@ -78,34 +101,78 @@ export interface Session {
   readonly expires: Date;
 }
 
-export async function signIn(ctx: Context, handleInput: string, password: string): Promise<Session> {
-  const handle = normaliseHandle(handleInput);
-  const row = ctx.sql.get<Member & { password_hash: string }>(
-    'SELECT id, handle, name, balance, created_at, password_hash FROM members WHERE handle = ?',
-    handle,
-  );
-  // Check a stand-in hash when there is no such person, so the time taken does
-  // not reveal which handles exist.
-  standInHash ??= hashPassword('not anybody’s password');
-  const matches = await verifyPassword(String(password ?? ''), row?.password_hash ?? (await standInHash));
-  if (!row || !matches) throw new Problem('That handle and password do not match.', 401);
-
+/** Opens a session for someone who has just joined or whose password has been checked. */
+export async function startSession(ctx: Context, member: Member): Promise<Session> {
   const token = newSecret();
+  const tokenHash = await sha256(token);
   const now = ctx.now();
   const expires = addDays(now, ctx.config.sessionDays);
-  const tokenHash = await sha256(token);
   ctx.sql.transaction(() => {
     ctx.sql.run('DELETE FROM sessions WHERE expires_at <= ?', now.toISOString());
     ctx.sql.run(
       'INSERT INTO sessions (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
       tokenHash,
-      row.id,
+      member.id,
       now.toISOString(),
       expires.toISOString(),
     );
   });
-  const { password_hash: _, ...member } = row;
   return { token, member, expires };
+}
+
+interface MemberWithPassword extends Member {
+  readonly password_hash: string;
+}
+
+function memberWithPassword(ctx: Context, handleInput: string): MemberWithPassword | undefined {
+  return ctx.sql.get<MemberWithPassword>(
+    'SELECT id, handle, name, balance, created_at, password_hash FROM members WHERE handle = ?',
+    normaliseHandle(handleInput),
+  );
+}
+
+function withoutPassword(row: MemberWithPassword): Member {
+  const { password_hash: _, ...member } = row;
+  return member;
+}
+
+// A stand-in for people who do not exist, so neither the time taken nor the
+// salt handed to the edge reveals which handles exist. It matches nothing. It
+// is made on first use, because Cloudflare allows randomness only inside a
+// request, never while a module loads.
+let standIn: string | undefined;
+function standInHash(): string {
+  standIn ??= `pbkdf2-sha256$${PASSWORD_ITERATIONS}$${toBase64Url(randomBytes(16))}$${toBase64Url(randomBytes(32))}`;
+  return standIn;
+}
+
+export async function signIn(ctx: Context, handleInput: string, password: string): Promise<Session> {
+  const row = memberWithPassword(ctx, handleInput);
+  const matches = await verifyPassword(String(password ?? ''), row?.password_hash ?? standInHash());
+  if (!row || !matches) throw new Problem('That handle and password do not match.', 401);
+  // Read the member again: the check above took a moment, and their record may have changed.
+  const fresh = memberWithPassword(ctx, handleInput);
+  if (!fresh) throw new Problem('That handle and password do not match.', 401);
+  return startSession(ctx, withoutPassword(fresh));
+}
+
+/**
+ * The salt and work factor for a handle, so the Worker at the edge can do the
+ * slow part of checking a password without holding up everyone else.
+ */
+export function passwordSalt(ctx: Context, handleInput: string): { salt: string; iterations: number } {
+  const parsed = parsePasswordHash(memberWithPassword(ctx, handleInput)?.password_hash ?? standInHash());
+  if (!parsed) throw new Error('A stored password hash could not be read.');
+  return { salt: parsed.salt, iterations: parsed.iterations };
+}
+
+/** Signs someone in with the key the edge derived from their password and salt. */
+export async function signInWithProof(ctx: Context, handleInput: string, proof: string): Promise<Session> {
+  const row = memberWithPassword(ctx, handleInput);
+  if (!row || !proofMatches(proof, row.password_hash)) {
+    throw new Problem('That handle and password do not match.', 401);
+  }
+  return startSession(ctx, withoutPassword(row));
 }
 
 export async function memberForToken(ctx: Context, token: string | undefined): Promise<Member | undefined> {

@@ -14,31 +14,29 @@ circles.get('/circles', (c) => {
   const list = projectsUnderReview(ctx);
   return page(
     c,
-    'Charter circles',
+    'Circles',
     <section class="narrow">
-      <h1>Charter circles</h1>
+      <h1>Circles</h1>
+      <p class="lead">Nobody here has the job of judging projects.</p>
       <p>
-        Nobody on {ctx.config.siteName} has the job of judging other people’s projects. When a project might break the
-        charter, a small circle of members is drawn at random, like a jury, and they decide together. Each person in a
-        circle has one vote. People who look after the project, have pooled into it or flagged it are never drawn.
+        When a project might break the charter, a few members are picked at random to decide, like a jury. Each has one
+        vote. Nobody who hosts the project, has put money into it or flagged it can be picked.
       </p>
-      <p>
-        A circle is drawn when the automatic charter check finds something in a new proposal and the proposer explains
-        why it still fits, or when {plural(ctx.config.flagThreshold, 'person flags', 'different people flag')} an open
-        project. A majority of the circle decides. If time runs out first, the project is only stopped when more of the
-        circle said it breaks the charter than said it fits.
+      <p class="faint">
+        A majority decides. If time runs out first, a project stops only if more people said it breaks the charter than
+        said it fits.
       </p>
       <h2>Deciding now</h2>
       {list.length === 0 ? (
-        <p class="quiet">No circles are sitting at the moment.</p>
+        <p class="quiet">No circles are sitting.</p>
       ) : (
-        <ul>
+        <ul class="plain">
           {list.map((project) => {
             const review = reviewsForProject(ctx, project.id).find((r) => r.status === 'open');
             return (
               <li>
-                <a href={review ? `/circles/${review.id}` : `/projects/${project.id}`}>{project.title}</a>{' '}
-                <span class="quiet">· {STATUS_NAMES[project.status]}</span>
+                <a href={review ? `/circles/${review.id}` : `/projects/${project.id}`}>{project.title}</a>
+                <span class="faint"> · {STATUS_NAMES[project.status]}</span>
               </li>
             );
           })}
@@ -58,36 +56,35 @@ circles.get('/circles/:id', (c) => {
 
   return page(
     c,
-    `Charter circle: ${project.title}`,
+    `Circle: ${project.title}`,
     <section class="narrow">
-      <p class="quiet">
-        <a href="/circles">Charter circles</a>
-      </p>
-      <h1>A charter circle for “{project.title}”</h1>
-      <p>
-        <a href={`/projects/${project.id}`}>Read the whole project</a>. {project.summary}
+      <a class="back" href="/circles">
+        ← Circles
+      </a>
+      <h1>A circle for “{project.title}”</h1>
+      <p class="lead">
+        {project.summary} <a href={`/projects/${project.id}`}>Read the project</a>
       </p>
 
+      <h2>Why it met</h2>
       {review.reason === 'proposal' ? (
         <>
-          <h2>Why this circle was drawn</h2>
-          <p>When this project was suggested, the charter check noticed these words:</p>
+          <p>The charter check noticed:</p>
           <ul>
             {project.concerns.map((concern) => (
               <li>
-                <strong>“{concern.term}”</strong> ({ruleById(concern.rule)?.title}) in “{concern.excerpt}”
+                <strong>“{concern.term}”</strong> in “{concern.excerpt}”
               </li>
             ))}
           </ul>
-          <p>The person who suggested it explained:</p>
+          <p>The person who suggested it says:</p>
           <blockquote>
             <Paragraphs text={project.concern_note} />
           </blockquote>
         </>
       ) : (
         <>
-          <h2>Why this circle was drawn</h2>
-          <p>{plural(view.flags.length, 'person', 'people')} flagged this project. Their reasons:</p>
+          <p>{plural(view.flags.length, 'person', 'people')} flagged it:</p>
           <ul>
             {view.flags.map((flag) => (
               <li>
@@ -99,20 +96,17 @@ circles.get('/circles/:id', (c) => {
       )}
 
       {review.status === 'open' ? (
-        <p class="callout">
-          This circle has {plural(tally.seats, 'person', 'people')} in it, and {plural(voted, 'has', 'have')} voted so far.
-          It closes on {day(config, review.deadline_at)}.
-          {tally.seats === 0 && ' Nobody could be drawn yet; people will be drawn as soon as there is someone eligible.'}
+        <p class="note">
+          {plural(tally.seats, 'person', 'people')} in this circle · {plural(voted, 'vote', 'votes')} so far · closes{' '}
+          {day(config, review.deadline_at)}
+          {tally.seats === 0 && '. Nobody could be picked yet. People will be picked as soon as someone can be.'}
         </p>
       ) : review.status === 'withdrawn' ? (
-        <p class="callout">The project was stopped by the people looking after it before the circle decided.</p>
+        <p class="note">The hosts stopped the project before the circle decided.</p>
       ) : (
-        <p class="callout">
-          <strong>
-            The circle decided that this project {review.outcome === 'fits' ? 'fits' : 'breaks'} the charter
-          </strong>{' '}
-          on {day(config, review.decided_at ?? review.created_at)}, with {plural(tally.fits, 'vote', 'votes')} for “fits”
-          and {plural(tally.breaks, 'vote', 'votes')} for “breaks”.
+        <p class="note">
+          <strong>The circle decided it {review.outcome === 'fits' ? 'fits' : 'breaks'} the charter.</strong>{' '}
+          {plural(tally.fits, 'vote', 'votes')} for fits, {plural(tally.breaks, 'vote', 'votes')} for breaks.
         </p>
       )}
 
@@ -131,35 +125,40 @@ circles.get('/circles/:id', (c) => {
       )}
 
       {review.status === 'open' && view.seat && !view.seat.vote && (
-        <form method="post" action={`/circles/${review.id}/vote`} class="stack callout">
+        <form method="post" action={`/circles/${review.id}/vote`} class="form glass panel">
           <Csrf c={c} />
-          <h2>You have been drawn for this circle</h2>
-          <p>
-            Read the project and the reasons above, then decide with <a href="/charter">the charter</a> in mind. Your vote
-            is anonymous. Only the totals are shown, once the circle has decided.
+          <h2>You’ve been picked</h2>
+          <p class="quiet">
+            Read the project, then decide with <a href="/charter">the charter</a> in mind. Your vote is private. Only the
+            totals are shown, once the circle has decided.
           </p>
-          <fieldset>
-            <legend>Does the project fit the charter?</legend>
-            <label class="check">
-              <input type="radio" name="verdict" value="fits" required /> It fits the charter
+          <div class="choices" role="radiogroup" aria-label="Your vote">
+            <label class="choice">
+              <input type="radio" name="verdict" value="fits" required />
+              <span>
+                <strong>It fits the charter</strong>
+              </span>
             </label>
-            <label class="check">
-              <input type="radio" name="verdict" value="breaks" required /> It breaks the charter
+            <label class="choice">
+              <input type="radio" name="verdict" value="breaks" required />
+              <span>
+                <strong>It breaks the charter</strong>
+              </span>
             </label>
-          </fieldset>
-          <label for="vote-rule">If it breaks the charter, which part?</label>
+          </div>
+          <label for="vote-rule">If it breaks it, which rule?</label>
           <select id="vote-rule" name="rule">
-            <option value="">Choose one</option>
+            <option value="">Choose a rule</option>
             {RULES.map((rule) => (
               <option value={rule.id}>{rule.title}</option>
             ))}
           </select>
-          <label for="vote-note">A note for the record (optional, anonymous)</label>
+          <label for="vote-note">Anything to add? (optional)</label>
           <textarea id="vote-note" name="note" rows={3} maxlength={1000}></textarea>
-          <button type="submit">Cast my vote</button>
+          <button type="submit">Vote</button>
         </form>
       )}
-      {review.status === 'open' && view.seat?.vote && <p class="quiet">Thank you, your vote is in.</p>}
+      {review.status === 'open' && view.seat?.vote && <p class="quiet">Thanks, your vote is in.</p>}
     </section>,
   );
 });
@@ -172,8 +171,8 @@ circles.post('/circles/:id/vote', signedIn, (c) => {
     c,
     'ok',
     outcome
-      ? `Thank you. Your vote settled it: the circle decided the project ${outcome === 'fits' ? 'fits' : 'breaks'} the charter.`
-      : 'Thank you, your vote is in.',
+      ? `Thanks. Your vote settled it: the project ${outcome === 'fits' ? 'fits' : 'breaks'} the charter.`
+      : 'Thanks, your vote is in.',
   );
   return c.redirect(`/circles/${id}`, 303);
 });

@@ -23,54 +23,41 @@ costs.get('/costs', (c) => {
     'Running costs',
     <>
       <section class="narrow">
-        <h1>What it costs to run {config.siteName}</h1>
+        <h1>Running costs</h1>
+        <p class="lead">Keeping {config.siteName} online costs money. Every bill is here, and nobody takes a cut.</p>
         <p>
-          Keeping {config.siteName} online costs money: hosting, and a domain name. Every one of those costs is listed here
-          with its receipt. Nobody takes a margin, a fee or a salary.
-        </p>
-        <p>
-          Gifts listed below cover costs first. After that, what is still owed is shared across every live pool at exactly
-          what it cost, once a month. Every pool gives up the same percentage of what it holds,
-          and inside each pool that works like any other use, so everyone’s portion shrinks by that same small percentage.
-          No single share takes more than {percent(config, maxRate)} of what is pooled; anything above that waits for the
-          next month.
+          Gifts pay first. After that, what is owed is shared across all live pools once a month: the same small share of
+          each pool, never more than {percent(config, maxRate)} at a time.
         </p>
         {config.demoResources && (
-          <p class="callout">
-            While {config.siteName} is a prototype, the resources in pools are pretend, so the shares below are pretend too.
-            The real bills are being paid by the founder’s cover.
-          </p>
+          <p class="note">While {config.siteName} is a prototype, pools hold pretend money. The real bills are paid by gifts.</p>
         )}
       </section>
 
-      <dl class="figures wide">
-        <div>
-          <dt>Costs so far</dt>
-          <dd>{money(config, totals.costs)}</dd>
+      <div class="figures">
+        <div class="figure glass">
+          <b>{money(config, totals.costs)}</b>
+          <span>bills so far</span>
         </div>
-        <div>
-          <dt>Covered by gifts</dt>
-          <dd>{money(config, totals.covered)}</dd>
+        <div class="figure glass">
+          <b>{money(config, totals.covered)}</b>
+          <span>paid by gifts</span>
         </div>
-        <div>
-          <dt>Shared across pools</dt>
-          <dd>{money(config, totals.shared)}</dd>
+        <div class="figure glass">
+          <b>{money(config, totals.shared)}</b>
+          <span>shared by pools</span>
         </div>
-        <div>
-          <dt>Still to share</dt>
-          <dd>{money(config, totals.outstanding)}</dd>
+        <div class="figure glass">
+          <b>{money(config, totals.outstanding)}</b>
+          <span>still owed</span>
         </div>
-        <div>
-          <dt>In live pools now</dt>
-          <dd>{money(config, overview.pooled)}</dd>
-        </div>
-      </dl>
+      </div>
 
-      <section>
-        <h2>Every cost</h2>
-        {overview.costs.length === 0 ? (
-          <p class="quiet">No costs recorded yet.</p>
-        ) : (
+      <h2>Bills</h2>
+      {overview.costs.length === 0 ? (
+        <p class="quiet">No bills yet.</p>
+      ) : (
+        <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -86,129 +73,115 @@ costs.get('/costs', (c) => {
               {overview.costs.map((cost) => (
                 <tr>
                   <td>{day(config, cost.incurred_on)}</td>
-                  <td>
-                    {cost.description} <span class="quiet">(recorded by {cost.recorded_by_name})</span>
-                  </td>
+                  <td>{cost.description}</td>
                   <td class="num">{money(config, cost.amount)}</td>
-                  <td>{cost.receipt_url ? <a href={cost.receipt_url} rel="nofollow noopener">Receipt</a> : <span class="quiet">None yet</span>}</td>
+                  <td>
+                    {cost.receipt_url ? (
+                      <a href={cost.receipt_url} rel="nofollow noopener">
+                        Receipt
+                      </a>
+                    ) : (
+                      <span class="faint">Not linked</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </section>
-
-      <section class="columns">
-        <div>
-          <h2>Gifts covering costs</h2>
-          {overview.covers.length === 0 ? (
-            <p class="quiet">None recorded yet.</p>
-          ) : (
-            <ul>
-              {overview.covers.map((cover) => (
-                <li>
-                  <strong>{cover.given_by}</strong>: {money(config, cover.amount)}
-                  {cover.note && <> · {cover.note}</>}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
-        <div>
-          <h2>Caretakers</h2>
-          <p class="quiet">
-            The people who pay the bills and record them here. Caretakers have no say over projects or circles.
-          </p>
-          {overview.caretakers.length === 0 ? (
+      )}
+
+      <div class="two">
+        <section>
+          <h2>Gifts</h2>
+          {overview.covers.length === 0 ? (
             <p class="quiet">None yet.</p>
           ) : (
-            <ul>
-              {overview.caretakers.map((person) => (
+            <ul class="plain">
+              {overview.covers.map((cover) => (
                 <li>
-                  <a href={`/people/${person.handle}`}>{person.name}</a>
+                  <strong>{cover.given_by}</strong>, {money(config, cover.amount)}
+                  {cover.note && <span class="faint"> · {cover.note}</span>}
                 </li>
               ))}
             </ul>
           )}
-        </div>
-      </section>
-
-      <section>
-        <h2>Shares so far</h2>
-        {overview.shares.length === 0 ? (
-          <p class="quiet">No running costs have been shared yet.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Date</th>
-                <th scope="col" class="num">
-                  Shared
-                </th>
-                <th scope="col" class="num">
-                  Of everything pooled
-                </th>
-                <th scope="col" class="num">
-                  Pools
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+        </section>
+        <section>
+          <h2>Shares</h2>
+          {overview.shares.length === 0 ? (
+            <p class="quiet">None yet.</p>
+          ) : (
+            <ul class="plain">
               {overview.shares.map((share) => (
-                <tr>
-                  <td>{day(config, share.at)}</td>
-                  <td class="num">{money(config, share.amount)}</td>
-                  <td class="num">{percent(config, share.amount / share.pooled)}</td>
-                  <td class="num">{share.pools}</td>
-                </tr>
+                <li>
+                  {day(config, share.at)}: <strong>{money(config, share.amount)}</strong>
+                  <span class="faint">
+                    {' '}
+                    · {percent(config, share.amount / share.pooled)} of every pool · {plural(share.pools, 'pool', 'pools')}
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <p class="faint">
+        Caretakers pay the bills and record them here. They have no say over projects or circles.
+        {overview.caretakers.length > 0 && (
+          <>
+            {' '}
+            Caretakers:{' '}
+            {overview.caretakers.map((person, index) => (
+              <>
+                {index > 0 && ', '}
+                <a href={`/people/${person.handle}`}>{person.name}</a>
+              </>
+            ))}
+            .
+          </>
         )}
-      </section>
+      </p>
 
       {caretaker && (
-        <section class="steward-tools">
-          <h2>For caretakers</h2>
-          <div class="columns">
-            <form method="post" action="/costs/cost" class="stack">
+        <details class="section glass">
+          <summary>Caretaker tools</summary>
+          <div class="two">
+            <form method="post" action="/costs/cost" class="form">
               <Csrf c={c} />
-              <h3>Record a cost</h3>
+              <h3>Record a bill</h3>
               <label for="cost-date">Date paid</label>
               <input id="cost-date" name="incurredOn" type="date" required max={today} value={today} />
-              <label for="cost-what">What it was for</label>
-              <Hint>For example: Cloudflare Workers Paid plan, October.</Hint>
-              <input id="cost-what" name="description" required maxlength={200} />
+              <label for="cost-what">What for?</label>
+              <input id="cost-what" name="description" required maxlength={200} placeholder="Cloudflare Workers, October" />
               <label for="cost-amount">Amount</label>
-              <input id="cost-amount" name="amount" inputmode="decimal" required maxlength={30} />
-              <label for="cost-receipt">Link to the receipt (optional)</label>
+              <input id="cost-amount" class="amount" name="amount" inputmode="decimal" required maxlength={30} />
+              <label for="cost-receipt">Receipt link (optional)</label>
               <input id="cost-receipt" name="receiptUrl" type="url" maxlength={500} placeholder="https://" />
-              <button type="submit">Record the cost</button>
+              <button type="submit">Record the bill</button>
             </form>
-            <form method="post" action="/costs/cover" class="stack">
+            <form method="post" action="/costs/cover" class="form">
               <Csrf c={c} />
-              <h3>Record a gift that covers costs</h3>
-              <label for="cover-by">Who is covering it</label>
+              <h3>Record a gift</h3>
+              <label for="cover-by">From</label>
               <input id="cover-by" name="givenBy" required maxlength={80} placeholder="The founder" />
               <label for="cover-amount">Amount</label>
-              <input id="cover-amount" name="amount" inputmode="decimal" required maxlength={30} />
+              <input id="cover-amount" class="amount" name="amount" inputmode="decimal" required maxlength={30} />
               <label for="cover-note">Note (optional)</label>
               <input id="cover-note" name="note" maxlength={500} />
               <button type="submit">Record the gift</button>
             </form>
           </div>
-          <form method="post" action="/costs/share" class="stack">
+          <form method="post" action="/costs/share" class="form">
             <Csrf c={c} />
             <h3>Share what is owed now</h3>
-            <p class="quiet">
-              This happens by itself on the first of each month. Use it if you need to share sooner. Right now{' '}
-              {money(config, totals.outstanding)} is waiting to be shared.
-            </p>
-            <button type="submit" class="secondary">
-              Share running costs now
+            <Hint>This happens by itself on the first of each month. {money(config, totals.outstanding)} is owed.</Hint>
+            <button type="submit" class="ghost">
+              Share now
             </button>
           </form>
-        </section>
+        </details>
       )}
     </>,
   );
@@ -223,7 +196,7 @@ costs.post('/costs/cost', signedIn, (c) => {
     amount: amountField(ctx.config, form),
     receiptUrl: field(form, 'receiptUrl'),
   });
-  flash(c, 'ok', 'The cost is recorded for everyone to see.');
+  flash(c, 'ok', 'Bill recorded.');
   return c.redirect('/costs', 303);
 });
 
@@ -235,7 +208,7 @@ costs.post('/costs/cover', signedIn, (c) => {
     amount: amountField(ctx.config, form),
     note: field(form, 'note'),
   });
-  flash(c, 'ok', 'The gift is recorded. Thank you.');
+  flash(c, 'ok', 'Gift recorded. Thank you.');
   return c.redirect('/costs', 303);
 });
 
@@ -247,8 +220,8 @@ costs.post('/costs/share', signedIn, (c) => {
     c,
     'ok',
     result
-      ? `${money(ctx.config, result.amount)} was shared across ${plural(result.pools, 'pool', 'pools')}.`
-      : 'There was nothing to share: either nothing is owed, or nothing is pooled.',
+      ? `${money(ctx.config, result.amount)} shared across ${plural(result.pools, 'pool', 'pools')}.`
+      : 'Nothing to share right now.',
   );
   return c.redirect('/costs', 303);
 });

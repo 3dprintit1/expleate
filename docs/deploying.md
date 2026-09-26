@@ -13,10 +13,14 @@ Check Cloudflare's current prices before relying on these numbers: [Workers pric
 ## Before the first deploy
 
 1. **A Cloudflare account on the Workers Paid plan.** In the dashboard: Workers & Pages, then Plans.
-2. **expleat.ing added to the same Cloudflare account.**
-   - If you registered it with Cloudflare Registrar, it is already there.
-   - If you registered it somewhere else, choose "Add a domain" in the Cloudflare dashboard, enter `expleat.ing`, pick the Free plan for the zone, and Cloudflare will give you two nameservers. Set those as the domain's nameservers at your registrar, then wait for Cloudflare to say the domain is active. That can take from a few minutes to a day.
-   - Either way, Cloudflare Registrar charges domains at cost with no markup, which suits the running-costs promise if you ever move the domain across.
+2. **expleat.ing added to the same Cloudflare account.** The domain is registered with VentraIP, so Cloudflare needs to answer for it:
+   1. In the Cloudflare dashboard, choose **Add a domain**, enter `expleat.ing`, and pick the **Free** plan for the domain. (The Workers Paid plan is separate and covers the site itself.) Cloudflare then shows you two nameservers, such as `ada.ns.cloudflare.com` and `bob.ns.cloudflare.com`. Yours will have different names.
+   2. In [VentraIP's VIPcontrol](https://vip.ventraip.com.au), go to **My Services**, then **Domains**, and click the **DNS** button next to `expleat.ing`.
+   3. If **DNSSEC** is switched on for the domain, switch it off first. Cloudflare can switch it back on later, with its own keys.
+   4. Open the **Custom Nameservers** tab, enter the two Cloudflare nameservers, and click **Set Custom Nameservers**.
+   5. Wait for Cloudflare to say the domain is active. VentraIP suggests allowing 2 to 6 hours, and it can take up to a day.
+
+   You never need to give anyone your VentraIP password for this. Nothing else changes at VentraIP: the domain stays registered there, and you renew it there.
 3. **Node 22.13 or newer**, then in this repository run `npm install`.
 
 ## Deploy

@@ -78,17 +78,47 @@ async function derive(password: string, salt: Uint8Array, iterations: number): P
   return new Uint8Array(bits);
 }
 
+export interface StoredPassword {
+  readonly iterations: number;
+  readonly salt: string;
+  readonly hash: string;
+}
+
+/** Reads a stored password hash such as "pbkdf2-sha256$100000$salt$hash". */
+export function parsePasswordHash(stored: string): StoredPassword | undefined {
+  const [scheme, iterationsText, salt, hash] = stored.split('$');
+  const iterations = Number(iterationsText);
+  if (scheme !== 'pbkdf2-sha256' || !Number.isInteger(iterations) || iterations < 1 || iterations > 10_000_000) {
+    return undefined;
+  }
+  if (!salt || !hash || !/^[\w-]+$/.test(salt) || !/^[\w-]+$/.test(hash)) return undefined;
+  return { iterations, salt, hash };
+}
+
 export async function hashPassword(password: string, iterations = PASSWORD_ITERATIONS): Promise<string> {
   const salt = randomBytes(16);
   const hash = await derive(password, salt, iterations);
   return `pbkdf2-sha256$${iterations}$${toBase64Url(salt)}$${toBase64Url(hash)}`;
 }
 
+/**
+ * The slow part of checking a password: deriving its key from the stored
+ * salt. On Cloudflare this runs in the Worker at the edge, so the one Durable
+ * Object that holds the ledger never spends its time on it.
+ */
+export async function passwordProof(password: string, salt: string, iterations: number): Promise<string> {
+  return toBase64Url(await derive(password, fromBase64Url(salt), iterations));
+}
+
+/** The quick part: does a derived key match the stored one? */
+export function proofMatches(proof: string, stored: string): boolean {
+  const parsed = parsePasswordHash(stored);
+  if (!parsed || !/^[\w-]{1,100}$/.test(proof)) return false;
+  return equalBytes(fromBase64Url(proof), fromBase64Url(parsed.hash));
+}
+
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, iterationsText, saltText, hashText] = stored.split('$');
-  const iterations = Number(iterationsText);
-  if (scheme !== 'pbkdf2-sha256' || !Number.isInteger(iterations) || !saltText || !hashText) return false;
-  const expected = fromBase64Url(hashText);
-  const actual = await derive(password, fromBase64Url(saltText), iterations);
-  return equalBytes(actual, expected);
+  const parsed = parsePasswordHash(stored);
+  if (!parsed) return false;
+  return proofMatches(await passwordProof(password, parsed.salt, parsed.iterations), stored);
 }

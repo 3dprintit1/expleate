@@ -6,9 +6,11 @@
  * When costs are shared, the outstanding amount is split between all the live
  * pools in proportion to what each holds, so every pool gives up the same
  * percentage. Inside each pool it works like any other use: everyone's portion
- * shrinks by that same percentage. A limit on the percentage taken in one go
- * protects projects from a sudden large bill; anything above the limit waits
- * for the next share.
+ * shrinks by that same percentage.
+ *
+ * A limit protects projects from a sudden large bill: in any one calendar
+ * month, no pool gives more than a set share of what it holds, however many
+ * times costs are shared. Anything above the limit waits for next month.
  */
 
 /** Parts per million: 20,000 is 2%. */
@@ -25,18 +27,32 @@ export function outstanding(totals: CostTotals): bigint {
   return left > 0n ? left : 0n;
 }
 
-/** How much to share now: everything outstanding, up to the limit. */
-export function amountToShare(outstandingAmount: bigint, pooled: bigint, maxPpm: number): bigint {
-  if (outstandingAmount <= 0n || pooled <= 0n) return 0n;
-  const limit = (pooled * BigInt(Math.max(0, Math.floor(maxPpm)))) / 1_000_000n;
-  return outstandingAmount < limit ? outstandingAmount : limit;
+/**
+ * The most each pool may still give this month: its share of what it holds,
+ * less anything it has already given this month.
+ */
+export function monthlyCaps(balances: readonly bigint[], givenThisMonth: readonly bigint[], maxPpm: number): bigint[] {
+  const ppm = BigInt(Math.max(0, Math.floor(maxPpm)));
+  return balances.map((balance, index) => {
+    const cap = (balance * ppm) / 1_000_000n - (givenThisMonth[index] ?? 0n);
+    return cap > 0n ? cap : 0n;
+  });
+}
+
+/**
+ * What each pool gives now: everything outstanding, up to the pools' caps,
+ * split in proportion to those caps. No pool gives more than its cap.
+ */
+export function planShare(owed: bigint, caps: readonly bigint[]): bigint[] {
+  const room = caps.reduce((sum, cap) => sum + cap, 0n);
+  const amount = owed < room ? owed : room;
+  return splitInProportion(amount > 0n ? amount : 0n, caps);
 }
 
 /**
  * Splits `total` between items in proportion to `sizes`, exactly. Each item
  * gets its share rounded down, then the units left over go one at a time to
- * the items that lost the most to rounding. No item gets more than its size
- * as long as `total` is no more than the sum of sizes.
+ * the items that lost the most to rounding. No item gets more than its size.
  */
 export function splitInProportion(total: bigint, sizes: readonly bigint[]): bigint[] {
   const sum = sizes.reduce((acc, size) => acc + size, 0n);

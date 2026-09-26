@@ -3,7 +3,7 @@
  * receipt, and any gifts that cover bills (the founder covers the first $200).
  * Whatever is left is shared across all live pools at exactly what it cost.
  */
-import { amountToShare, outstanding, splitInProportion } from '../core/costs.js';
+import { monthlyCaps, outstanding, planShare } from '../core/costs.js';
 import { newId } from '../core/crypto.js';
 import { toStored } from '../core/money.js';
 import { type Context, Problem, cleanLine, cleanText, nowIso } from './context.js';
@@ -171,8 +171,10 @@ export interface ShareResult {
 
 /**
  * Shares whatever running costs are outstanding across every live pool, in
- * proportion to what each holds, up to the configured limit. Runs once a month
- * on Cloudflare, and caretakers can also run it by hand.
+ * proportion to what each holds. In any calendar month no pool gives more than
+ * the configured share of what it holds, however often this runs, so a second
+ * click or a repeated scheduled run cannot take more. Runs on the first of
+ * each month on Cloudflare, and caretakers can also run it by hand.
  */
 export function shareRunningCosts(ctx: Context): ShareResult | null {
   return ctx.sql.transaction(() => {
@@ -181,11 +183,26 @@ export function shareRunningCosts(ctx: Context): ShareResult | null {
       ctx,
       "SELECT * FROM projects WHERE status IN ('open', 'review') AND pool_balance > 0 ORDER BY id",
     );
-    const pooled = live.reduce((acc, project) => acc + BigInt(project.pool_balance), 0n);
-    const amount = amountToShare(owed, pooled, ctx.config.maxCostSharePpm);
+    const monthStart = `${nowIso(ctx).slice(0, 7)}-01T00:00:00.000Z`;
+    const given = new Map(
+      ctx.sql
+        .all<{ project_id: string; total: number }>(
+          "SELECT project_id, SUM(amount) AS total FROM ledger WHERE kind = 'cost_share' AND at >= ? GROUP BY project_id",
+          monthStart,
+        )
+        .map((row) => [row.project_id, BigInt(row.total)]),
+    );
+    const balances = live.map((project) => BigInt(project.pool_balance));
+    const caps = monthlyCaps(
+      balances,
+      live.map((project) => given.get(project.id) ?? 0n),
+      ctx.config.maxCostSharePpm,
+    );
+    const parts = planShare(owed, caps);
+    const amount = parts.reduce((sum, part) => sum + part, 0n);
     if (amount === 0n) return null;
 
-    const parts = splitInProportion(amount, live.map((project) => BigInt(project.pool_balance)));
+    const pooled = balances.reduce((sum, balance) => sum + balance, 0n);
     const shareId = newId();
     let pools = 0;
     live.forEach((project, index) => {

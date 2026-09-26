@@ -16,7 +16,8 @@ A platform where anyone can suggest a project of creativity, adventure or joy, a
 - `src/store`: synchronous `Sql` interface with node:sqlite and Durable Object adapters, and migrations in schema.ts.
 - `src/services`: one function per action, each in a transaction. records.ts holds shared reads and writes.
 - `src/web`: Hono app with server-rendered JSX, forms protected by a double-submit token and an Origin check, read-only JSON API under /api.
-- `src/node.ts` and `src/worker.ts`: the two entry points. The Worker sends every request to one Durable Object.
+- `src/node.ts` and `src/worker.ts`: the two entry points. The Worker sends every request to one Durable Object, the Commons, and does the slow password work at the edge first, passing results in the headers listed in `src/web/edge.ts`. Nothing slow may run inside the Commons: it serves everyone, one request at a time.
+- docs/how-it-runs.md explains the design, how it grows, and what is still missing.
 
 ## Rules that must hold
 
@@ -24,9 +25,9 @@ A platform where anyone can suggest a project of creativity, adventure or joy, a
 - Resources are never created or lost: test/helpers.ts `expectConservation` checks balances, pools, uses, cost shares and moves out against everything added.
 - No `await` between a database read and the write that depends on it (Cloudflare would let another request in between).
 - Amounts are integers in the smallest currency unit; bigint in core maths, stored as INTEGER, weights stored as TEXT.
-- Never show who put in how much. Take-back notes are for stewards only. Circle votes are anonymous.
+- Never show who put in how much. Take-back notes are for hosts only. Circle votes are anonymous.
 - No JavaScript on pages and no third-party requests. The CSP forbids scripts and inline styles.
 
 ## Writing
 
-British English, plain and warm, short sentences. No em dashes. Use the words in CONTRIBUTING.md: "put in", "take back", "portion", "people in the pool", "stewards", "uses", "running costs". Avoid invest, donate, backers, withdraw, refund, fees, users, growth, engagement.
+British English, plain and warm, short sentences. No em dashes. Use the words in CONTRIBUTING.md: "put in", "take back", "portion", "people in the pool", "hosts", "uses", "running costs". Avoid invest, donate, backers, withdraw, refund, fees, users, growth, engagement.

@@ -13,12 +13,15 @@ import { groups } from './routes/groups.js';
 import { me } from './routes/me.js';
 import { pages } from './routes/pages.js';
 import { projects } from './routes/projects.js';
+import { safeNext } from './format.js';
 import { flash, sessions } from './session.js';
 
 export interface AppOptions {
   readonly context: Context;
   /** Serves /styles.css and friends when running on Node. Cloudflare serves them itself. */
   readonly staticFiles?: MiddlewareHandler;
+  /** Set on Cloudflare, where the Worker does the slow part of password checks before a request arrives. */
+  readonly edgeAuth?: boolean;
 }
 
 /** Where to send someone back to after a form they sent could not be carried out. */
@@ -27,16 +30,15 @@ function backTo(url: string, referer: string | undefined): string {
   if (referer) {
     try {
       const from = new URL(referer);
-      if (from.host === here.host) return from.pathname + from.search;
+      if (from.host === here.host) return safeNext(from.pathname + from.search);
     } catch {
       // Fall through to the parent path.
     }
   }
-  const parent = here.pathname.replace(/\/[^/]*$/, '');
-  return parent || '/';
+  return safeNext(here.pathname.replace(/\/[^/]*$/, ''));
 }
 
-export function createApp({ context, staticFiles }: AppOptions): Hono<AppEnv> {
+export function createApp({ context, staticFiles, edgeAuth = false }: AppOptions): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   app.use(
@@ -60,12 +62,14 @@ export function createApp({ context, staticFiles }: AppOptions): Hono<AppEnv> {
     app.use('/styles.css', staticFiles);
     app.use('/favicon.svg', staticFiles);
     app.use('/robots.txt', staticFiles);
+    app.use('/fonts/*', staticFiles);
   }
 
   // Circle deadlines are settled as people use the site, at most once a minute.
   let lastSweep = 0;
   app.use('*', async (c, next) => {
     c.set('ctx', context);
+    c.set('edgeAuth', edgeAuth);
     const now = context.now().getTime();
     if (now - lastSweep > 60_000) {
       lastSweep = now;
@@ -75,7 +79,16 @@ export function createApp({ context, staticFiles }: AppOptions): Hono<AppEnv> {
     await next();
   });
 
-  app.use('*', bodyLimit({ maxSize: 64 * 1024, onError: () => { throw new Problem('That was too much to send in one go.', 400); } }));
+  // Room for the longest story in any script: 10,000 characters of Japanese is about 90 KB once encoded.
+  app.use(
+    '*',
+    bodyLimit({
+      maxSize: 256 * 1024,
+      onError: () => {
+        throw new Problem('That was too much to send in one go.', 400);
+      },
+    }),
+  );
   app.use('*', sessions());
 
   app.route('/', api);

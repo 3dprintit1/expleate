@@ -12,7 +12,7 @@ import {
 import { projectsOfGroup } from '../../services/projects.js';
 import { Csrf, ErrorSummary, Hint, Paragraphs, ProjectCard, page } from '../components.js';
 import type { AppEnv, Form } from '../env.js';
-import { day, field } from '../format.js';
+import { day, field, plural } from '../format.js';
 import { signedIn } from '../guards.js';
 import { flash } from '../session.js';
 
@@ -21,20 +21,18 @@ export const groups = new Hono<AppEnv>();
 const GroupForm: FC<{ c: HonoContext<AppEnv>; form: Form; error?: string | undefined }> = ({ c, form, error }) => (
   <section class="narrow">
     <h1>Start a group</h1>
-    <p>
-      A group can suggest projects and look after them together. Everyone in a group is equal: there are no owners or
-      admins, and anyone in it can invite others.
-    </p>
+    <p class="lead">Host projects together.</p>
+    <p class="faint">Everyone in a group is equal, and anyone in it can invite others.</p>
     <ErrorSummary message={error} />
-    <form method="post" action="/groups" class="stack">
+    <form method="post" action="/groups" class="form glass panel">
       <Csrf c={c} />
       <label for="name">Name</label>
-      <input id="name" name="name" required maxlength={80} value={field(form, 'name')} />
+      <input id="name" name="name" required maxlength={80} placeholder="The Underpass Painters" value={field(form, 'name')} />
       <label for="handle">Handle</label>
-      <Hint>3 to 24 letters, numbers or underscores, for the group’s address.</Hint>
+      <Hint>Letters, numbers and underscores, for the group’s address.</Hint>
       <input id="handle" name="handle" required maxlength={25} autocapitalize="none" value={field(form, 'handle')} />
       <label for="about">About the group (optional)</label>
-      <textarea id="about" name="about" rows={4} maxlength={2000}>
+      <textarea id="about" name="about" rows={3} maxlength={2000}>
         {field(form, 'about')}
       </textarea>
       <button type="submit">Start the group</button>
@@ -75,45 +73,53 @@ groups.get('/groups/:handle', (c) => {
     group.name,
     <>
       <h1>{group.name}</h1>
-      <p class="quiet">
-        @{group.handle} · started {day(ctx.config, group.created_at)}
+      <p class="faint">
+        @{group.handle} · {plural(people.length, 'person', 'people')} · started {day(ctx.config, group.created_at)}
       </p>
-      {group.about && <Paragraphs text={group.about} />}
-      <section class="columns">
-        <div>
-          <h2>People</h2>
-          <ul>
-            {people.map((person) => (
-              <li>
-                <a href={`/people/${person.handle}`}>{person.name}</a>
-              </li>
-            ))}
-          </ul>
+      {group.about && (
+        <div class="narrow">
+          <Paragraphs text={group.about} />
         </div>
-        {inGroup && (
-          <div>
-            <form method="post" action={`/groups/${group.handle}/invite`} class="stack">
+      )}
+      <p>
+        {people.map((person, index) => (
+          <>
+            {index > 0 && ', '}
+            <a href={`/people/${person.handle}`}>{person.name}</a>
+          </>
+        ))}
+      </p>
+
+      {inGroup && (
+        <details class="section glass">
+          <summary>Invite someone, or leave</summary>
+          <div class="two">
+            <form method="post" action={`/groups/${group.handle}/invite`} class="form">
               <Csrf c={c} />
-              <label for="invite-handle">Invite someone by their handle</label>
+              <label for="invite-handle">Their handle</label>
               <input id="invite-handle" name="handle" required maxlength={25} autocapitalize="none" />
               <button type="submit">Invite</button>
             </form>
-            <form method="post" action={`/groups/${group.handle}/leave`} class="stack">
+            <form method="post" action={`/groups/${group.handle}/leave`} class="form">
               <Csrf c={c} />
-              <button type="submit" class="secondary">
-                Leave the group
+              <span class="label">Leave {group.name}</span>
+              <span class="hint">The group carries on without you.</span>
+              <button type="submit" class="ghost">
+                Leave
               </button>
             </form>
           </div>
-        )}
-      </section>
+        </details>
+      )}
+
       <h2>Projects</h2>
       {list.length === 0 ? (
         <p class="quiet">
-          None yet.{' '}
+          None yet.
           {inGroup && (
             <>
-              <a href="/projects/new">Suggest one</a> as {group.name}.
+              {' '}
+              <a href="/projects/new">Suggest one</a>
             </>
           )}
         </p>
@@ -132,7 +138,7 @@ groups.post('/groups/:handle/invite', signedIn, (c) => {
   const ctx = c.get('ctx');
   const group = requireGroupByHandle(ctx, c.req.param('handle'));
   const invitee = inviteToGroup(ctx, group.id, c.get('member')!.id, field(c.get('form'), 'handle'));
-  flash(c, 'ok', `${invitee.name} is invited. They will see it on their page.`);
+  flash(c, 'ok', `${invitee.name} is invited.`);
   return c.redirect(`/groups/${group.handle}`, 303);
 });
 
@@ -140,6 +146,6 @@ groups.post('/groups/:handle/leave', signedIn, (c) => {
   const ctx = c.get('ctx');
   const group = requireGroupByHandle(ctx, c.req.param('handle'));
   leaveGroup(ctx, group.id, c.get('member')!.id);
-  flash(c, 'ok', `You have left ${group.name}.`);
+  flash(c, 'ok', `You’ve left ${group.name}.`);
   return c.redirect('/me', 303);
 });

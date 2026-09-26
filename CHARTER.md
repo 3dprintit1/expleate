@@ -34,7 +34,7 @@ Projects have nothing to do with war or the military. That includes help for peo
 Nobody profits from a pool. So:
 
 - nothing is sold, and nobody invests
-- no wages, fees or salaries are paid from a pool, to stewards or to anyone else
+- no wages, fees or salaries are paid from a pool, to hosts or to anyone else
 - there are no prizes of money
 - there are no businesses, start-ups or products
 
@@ -59,16 +59,14 @@ Projects must not hurt people, animals or places, and must be lawful where they 
 
 People joining or leaving a pool never changes what your portion is worth. Only the project using resources does that, and it affects everyone by the same proportion. [How pooling works](docs/pooling.md) explains it with examples.
 
-## Looking after a project
+## Hosting a project
 
-The person or group who suggested a project looks after it. We call them its stewards.
+Whoever suggests a project hosts it. When a group suggests one, everyone in the group is a host, and groups have no owners or admins.
 
-- Stewards record every use of the pool and what it was for. Anyone can read these.
-- Stewards post updates, so everyone in the pool can see where the project is heading and decide whether to stay in.
+- Hosts record every use of the pool and what it was for. Anyone can read these.
+- Hosts share news, so everyone in the pool can see where the project is heading and decide whether to stay in.
 - Pooled resources go to the project itself, never to anyone as pay.
-- Stewards can finish a project at any time, and whatever is left goes back to the people in the pool.
-
-When a group suggests a project, everyone in the group is a steward. Groups have no owners or admins.
+- Hosts can finish a project at any time, and whatever is left goes back to the people in the pool.
 
 ## When a project might break the charter
 
@@ -76,7 +74,7 @@ When someone suggests a project, an automatic check looks for words that often m
 
 Anyone can flag a project they think breaks the charter. Once three different people have flagged the same project, its pool pauses.
 
-Either way, a **charter circle** is drawn: a handful of members picked at random, a bit like a jury. Nobody who looks after the project, has pooled into it or has flagged it can be drawn. Each person in the circle has one vote, and votes are anonymous.
+Either way, a **charter circle** is drawn: a handful of members picked at random, a bit like a jury. Nobody who hosts the project, has pooled into it or has flagged it can be drawn. Each person in the circle has one vote, and votes are anonymous.
 
 A majority of the circle decides. If the circle runs out of time first, the project is only stopped when more of the circle said it breaks the charter than said it fits. If a circle finds that a project breaks the charter, its pool closes and everything left goes back to the people in it.
 
@@ -95,7 +93,7 @@ Caretakers are the people who pay the bills and record them. They have no say ov
 - Nobody can see how much anyone else has pooled. A pool shows how many people are in it and what it holds.
 - There are no leaderboards and no rankings by money. Projects are listed in an order that is reshuffled every day, so every project takes its turn near the top.
 - You choose whether your name appears among the people in a pool. Amounts never do.
-- A pool's record lists every movement in and out, so anyone can check the books. Only uses are tied to a name: the steward who recorded them.
+- A pool's record lists every movement in and out, so anyone can check the books. Only uses are tied to a name: the host who recorded them.
 
 ## Changing this charter
 

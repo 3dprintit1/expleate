@@ -1,6 +1,6 @@
 # How pooling works
 
-Every project on Expleate has one pool. People put resources in, the project's stewards use resources for the project, and anyone can take their portion back at any time.
+Every project on Expleate has one pool. People put resources in, the project's hosts use resources for the project, and anyone can take their portion back at any time.
 
 Two promises hold for everyone in every pool:
 
@@ -15,15 +15,15 @@ Amara puts in $100 and Kenji puts in $100. The pool holds $200. Nothing has been
 
 ### The pool has been used
 
-Amara and Kenji have $100 each in the pool. The stewards use $150 on rope and a tent, which leaves $50. Three quarters of the pool has been used, so three quarters of each portion has gone with it: Amara and Kenji can each take back $25.
+Amara and Kenji have $100 each in the pool. The hosts use $150 on rope and a tent, which leaves $50. Three quarters of the pool has been used, so three quarters of each portion has gone with it: Amara and Kenji can each take back $25.
 
 ### Someone joins after a use
 
-Amara puts in $100. The stewards use $50 of it. Then Kenji puts in $100. Amara's portion is now $50, and Kenji's is $100. None of Kenji's resources went on something that happened before he joined.
+Amara puts in $100. The hosts use $50 of it. Then Kenji puts in $100. Amara's portion is now $50, and Kenji's is $100. None of Kenji's $100 went on something that happened before it arrived.
 
 ### Taking back part of a portion
 
-Amara's portion is worth $80. She takes back $30 and leaves $50 in. From then on, her remaining $50 carries later uses in proportion, like everyone else's.
+Amara's portion is worth $80. Amara takes back $30 and leaves $50 in. From then on, that $50 carries later uses in proportion, like everyone else's.
 
 ### The project finishes
 
@@ -37,8 +37,8 @@ For one person on their own that works exactly. Put in $100, the pot halves, and
 
 With more than one person, reading it word for word goes wrong:
 
-- Amara and Kenji each put in $100, and nothing is used. Amara takes her $100 back. The pot now holds $100, which is less than the $200 it held when Kenji put his in. His $100 was 50% of the pot then, so he would get 50% of $100: only $50, although nothing was ever used. The other $50 would be stranded.
-- Amara puts $100 into an empty pot, so hers is 100% of it. Kenji puts in $100, which is 50%. The project uses $150. If Amara asks first, she gets 100% of the $50 left, and Kenji gets nothing. Whoever asks first does best, which is the kind of race Expleate exists to avoid.
+- Amara and Kenji each put in $100, and nothing is used. Amara takes $100 back. The pot now holds $100, which is less than the $200 it held when Kenji put money in. Kenji's $100 was 50% of the pot then, so Kenji would get 50% of $100: only $50, although nothing was ever used. The other $50 would be stranded.
+- Amara puts $100 into an empty pot, so Amara's share is 100%. Kenji puts in $100, which is 50%. The project uses $150. If Amara asks first, Amara gets 100% of the $50 left, and Kenji gets nothing. Whoever asks first does best, which is the kind of race Expleate exists to avoid.
 
 So Expleate keeps the idea and fixes the counting. Your part of the pool is set when you put something in. People joining or leaving change the size of your part but not what it is worth, because they bring or take their own resources with them. Only uses shrink what it is worth. For someone alone in a pool, this gives exactly the original rule. With other people it stays fair, and it no longer matters who takes back first.
 
@@ -51,7 +51,7 @@ Each person in a pool holds a *weight*, and the pool's resources belong to peopl
 - **Using** lowers what the pool holds but leaves the weights alone, so every portion is worth less by the same proportion.
 - A portion is worth its weight times what the pool holds, divided by the total weight, and never more than what its holder put in, less what they have already taken back.
 
-Everything is counted exactly, in whole cents, using whole-number arithmetic with no rounding errors building up. Where rounding cannot be avoided, it always favours the people who stay in the pool, so the pool can always pay everyone what it says they are owed. You may occasionally see a cent of difference because of this, never more than a cent or two.
+Everything is counted exactly, in whole cents, using whole-number arithmetic with no rounding errors building up. Where rounding cannot be avoided, it is arranged so that the pool can always pay everyone what it says they are owed, and so that putting something in never costs you a cent. After a use you may see a cent of difference now and then, never more than a cent or two.
 
 If a use empties the pool completely, every portion in it is worth nothing and the pool starts afresh for anyone who puts something in afterwards.
 

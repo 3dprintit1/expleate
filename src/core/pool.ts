@@ -1,7 +1,7 @@
 /**
  * The pooling rules.
  *
- * Every project has one pool. People put resources in, the project's stewards
+ * Every project has one pool. People put resources in, the project's hosts
  * use resources for the project, and anyone can take back their portion at any
  * time. Two promises hold for everyone in a pool:
  *
@@ -77,12 +77,21 @@ function ceilDiv(numerator: bigint, denominator: bigint): bigint {
 }
 
 /**
+ * Rounding a weight costs at most about a trillionth of a smallest unit.
+ * Portions are read with an allowance of a billionth, so that rounding never
+ * shows up as a lost cent, for instance for someone who joins after a use.
+ * The allowances cannot add up to a whole unit while a pool has fewer than a
+ * billion portions, so the pool can still pay everyone.
+ */
+const ALLOWANCE = 1_000_000_000n;
+
+/**
  * What a portion is worth right now: the most its holder could take back.
  * It is their share of the pool by weight, never more than their cap.
  */
 export function portionValue(pool: Pool, portion: Portion): bigint {
   if (portion.weight === 0n || pool.weight === 0n) return 0n;
-  const fair = (portion.weight * pool.balance) / pool.weight;
+  const fair = (portion.weight * pool.balance * ALLOWANCE + pool.weight) / (pool.weight * ALLOWANCE);
   return fair < portion.cap ? fair : portion.cap;
 }
 
@@ -180,7 +189,7 @@ export interface Use {
 }
 
 /**
- * The project's stewards use `amount` from the pool. The balance goes down and
+ * The project's hosts use `amount` from the pool. The balance goes down and
  * the weights stay put, so every portion shrinks by the same proportion.
  */
 export function use(pool: Pool, amount: bigint): Use {

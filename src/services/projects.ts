@@ -4,7 +4,7 @@ import { toStored } from '../core/money.js';
 import { type Context, Problem, cleanLine, cleanText, nowIso } from './context.js';
 import { isGroupMember } from './groups.js';
 import { settlePool } from './pools.js';
-import { type Project, type ProjectStatus, queryProjects, requireProject, requireSteward } from './records.js';
+import { type Project, type ProjectStatus, queryProjects, requireProject, requireHost } from './records.js';
 import { openReview, withdrawReviews } from './reviews.js';
 
 export interface ProposalInput {
@@ -133,8 +133,8 @@ export function listProjects(ctx: Context, options: ListOptions = {}): { project
   return { projects: rows.slice(0, pageSize), more: rows.length > pageSize };
 }
 
-/** Projects someone looks after, on their own or through a group. */
-export function projectsStewardedBy(ctx: Context, memberId: string): Project[] {
+/** Projects someone hosts, on their own or through a group. */
+export function projectsHostedBy(ctx: Context, memberId: string): Project[] {
   return queryProjects(
     ctx,
     `SELECT * FROM projects
@@ -158,12 +158,12 @@ export interface Update {
   readonly author_handle: string;
 }
 
-/** Stewards keep everyone in the pool up to date on where the project is heading. */
+/** Hosts keep everyone in the pool up to date on where the project is heading. */
 export function postUpdate(ctx: Context, projectId: string, memberId: string, body: string): void {
   const text = cleanText(body, { label: 'The update', field: 'body', min: 2, max: 5_000 });
   ctx.sql.transaction(() => {
     const project = requireProject(ctx, projectId);
-    requireSteward(ctx, project, memberId);
+    requireHost(ctx, project, memberId);
     if (project.status === 'closed' || project.status === 'declined') {
       throw new Problem('This project was closed by a charter circle.', 409);
     }
@@ -188,7 +188,7 @@ export function projectUpdates(ctx: Context, projectId: string): Update[] {
 }
 
 /**
- * Stewards finish a project: either it happened, or it is not going ahead.
+ * Hosts finish a project: either it happened, or it is not going ahead.
  * Whatever is left in the pool goes back to the people in it.
  */
 export function finishProject(
@@ -203,7 +203,7 @@ export function finishProject(
 
   ctx.sql.transaction(() => {
     const project = requireProject(ctx, projectId);
-    requireSteward(ctx, project, memberId);
+    requireHost(ctx, project, memberId);
     if (!['awaiting', 'open', 'review'].includes(project.status)) {
       throw new Problem('This project has already finished.', 409);
     }

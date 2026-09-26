@@ -9,7 +9,7 @@ import { poolLedger } from '../../services/pools.js';
 import { listProjects, projectUpdates } from '../../services/projects.js';
 import type { Project } from '../../services/records.js';
 import { requireProject } from '../../services/records.js';
-import { stewardOf } from '../components.js';
+import { hostOf } from '../components.js';
 import type { AppEnv } from '../env.js';
 
 export const api = new Hono<AppEnv>();
@@ -43,7 +43,7 @@ api.get('/api/charter', (c) =>
 api.get('/api/projects', (c) => {
   const ctx = c.get('ctx');
   const spirit = c.req.query('spirit') ?? '';
-  const page = Math.max(0, Number.parseInt(c.req.query('page') ?? '0', 10) || 0);
+  const page = Math.max(0, Math.min(1000, Number.parseInt(c.req.query('page') ?? '0', 10) || 0));
   const { projects, more } = listProjects(ctx, {
     spirit: isSpirit(spirit) ? spirit : undefined,
     show: c.req.query('show') === 'finished' ? 'finished' : 'live',
@@ -62,7 +62,7 @@ api.get('/api/projects/:id', (c) => {
     ...summary(project),
     story: project.story,
     plans: project.plans,
-    stewards: stewardOf(ctx, project).label,
+    hosts: hostOf(ctx, project).label,
     updates: projectUpdates(ctx, project.id).map((u) => ({ body: u.body, at: u.created_at, by: u.author_name })),
     ledger: poolLedger(ctx, project.id, 1000),
   });

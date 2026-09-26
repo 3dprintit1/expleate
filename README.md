@@ -57,7 +57,7 @@ To run the same checks on every push, copy [docs/ci.yml](docs/ci.yml) to `.githu
 
 ## Deploying
 
-[docs/deploying.md](docs/deploying.md) covers putting it online at expleat.ing on Cloudflare, becoming the first caretaker and recording the founder's $200.
+[docs/deploying.md](docs/deploying.md) covers putting it online at expleat.ing on Cloudflare, pointing the domain at Cloudflare from VentraIP, becoming the first caretaker and recording the founder's $200. [docs/how-it-runs.md](docs/how-it-runs.md) explains how the system runs, how it grows, and what it still needs before real money.
 
 ## Taking part
 

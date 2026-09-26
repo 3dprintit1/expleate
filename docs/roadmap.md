@@ -1,6 +1,6 @@
 # What comes next
 
-Expleate works end to end today with pretend resources. These are the larger pieces still to build, roughly in the order they matter.
+Expleate works end to end today with pretend resources. These are the larger pieces still to build, roughly in the order they matter. [How Expleate runs](how-it-runs.md) has the fuller picture, including how it grows and a checklist for real money.
 
 ## Real money
 
@@ -8,7 +8,7 @@ This is the big one. Holding other people's money in a pool, and letting them ta
 
 - a legal home, such as a cooperative or an association, with legal advice for the countries it will serve
 - a payment partner able to hold pooled funds, accept contributions from many countries and pay back take-backs, including the identity checks that come with that
-- a way to pay for a project's uses directly, for example paying suppliers against receipts, so pooled money does not pass through stewards' own accounts
+- a way to pay for a project's uses directly, for example paying suppliers against receipts, so pooled money does not pass through hosts' own accounts
 
 `addResources` and `moveOut` in `src/services/members.ts` are where payments would arrive and leave.
 

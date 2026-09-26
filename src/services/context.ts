@@ -42,8 +42,11 @@ interface TextRules {
   readonly max: number;
 }
 
-// Control characters other than tab and newline have no place in what people write.
-const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+// Control characters other than tab and newline have no place in what people
+// write, and nor do characters that are invisible and could hide words, such
+// as soft hyphens, zero-width spaces and direction overrides. Joiners that
+// some scripts and emoji need are kept.
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u00ad\u200b\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 
 /** Tidies a piece of writing and checks its length. Line breaks are kept. */
 export function cleanText(raw: unknown, rules: TextRules): string {
