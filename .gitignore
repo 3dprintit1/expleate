@@ -11,3 +11,4 @@ coverage/
 worker-configuration.d.ts
 .wrangler/
 .dev.vars
+.preview/

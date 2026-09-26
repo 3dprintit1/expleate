@@ -56,6 +56,7 @@ npm test        # all tests
 npm run check   # types, for both Node and Cloudflare
 npm run docs    # after editing CHARTER.md, docs/pooling.md, docs/one-person-one-voice.md
                 # or public/styles.css, which the site uses
+npm run preview # a clickable snapshot with the example data, as plain files in .preview/site
 ```
 
 To run the same checks on every push, copy [docs/ci.yml](docs/ci.yml) to `.github/workflows/ci.yml`.

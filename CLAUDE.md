@@ -9,6 +9,7 @@ A platform where anyone can suggest a project of creativity, adventure or joy, a
 - `npm run seed && CARETAKERS=demo_caretaker npm run dev`: local site on http://localhost:8787 with example data (password "pool together")
 - `npm run docs`: regenerate src/web/docs.generated.ts after editing CHARTER.md, docs/pooling.md, docs/one-person-one-voice.md or public/styles.css
 - `npm run cf:dev`: the Cloudflare build locally; `npm run deploy`: deploy (docs/deploying.md)
+- `npm run preview`: a static, clickable snapshot of the site with example data in .preview/site, for sharing as a preview
 
 ## Layout
 

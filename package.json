@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "seed": "tsx src/seed.ts",
     "docs": "tsx scripts/build-docs.ts",
+    "preview": "tsx scripts/export-preview.ts",
     "deploy": "wrangler deploy",
     "cf:dev": "wrangler dev"
   },
