@@ -53,6 +53,24 @@ export interface CleanProposal {
 // A prime just below 2^31: multiplying by a daily number modulo it reshuffles every day.
 const SHUFFLE_PRIME = 2_147_483_647;
 
+/**
+ * One person can have only a few live projects at once, which keeps anyone
+ * from filling the site with projects. Finishing one makes room for another.
+ */
+export function checkLiveProjects(ctx: Context, memberId: string): void {
+  const live = ctx.sql.get<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM projects WHERE proposer_id = ? AND status IN ('awaiting', 'open', 'review')",
+    memberId,
+  );
+  const most = ctx.config.maxLiveProjects;
+  if ((live?.n ?? 0) >= most) {
+    throw new Problem(
+      `You can have ${most === 1 ? 'one live project' : `${most} live projects`} at a time. Finish one to suggest another.`,
+      400,
+    );
+  }
+}
+
 /** Tidies a proposal and checks everything a person can fix, before anything else happens to it. */
 export function cleanProposal(input: ProposalInput): CleanProposal {
   const title = cleanLine(input.title, { label: 'A title', field: 'title', min: 3, max: 100 });
@@ -90,6 +108,7 @@ export function proposeProject(
     if (input.groupId && !isGroupMember(ctx, input.groupId, memberId)) {
       throw new Problem('You can only suggest projects for groups you are in.', 403, 'groupId');
     }
+    checkLiveProjects(ctx, memberId);
     const id = newId();
     const now = nowIso(ctx);
     const status: ProjectStatus = needsLook ? 'awaiting' : 'open';

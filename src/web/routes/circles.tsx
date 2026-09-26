@@ -33,7 +33,7 @@ circles.get('/circles', (c) => {
       </p>
       <p class="faint">
         A majority decides. If time runs out first, a project stops only if more people said it breaks the charter than
-        said it fits.
+        said it fits. <a href="/one-person-one-voice">How circles stay fair</a>
       </p>
       <h2>Deciding now</h2>
       {list.length === 0 ? (

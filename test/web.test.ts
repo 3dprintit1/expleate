@@ -104,6 +104,7 @@ describe('the site', () => {
     const browser = new Browser(app);
     expect(await browser.text('/charter')).toContain('No financial gain');
     expect(await browser.text('/pooling')).toContain('Why the rule is counted this way');
+    expect(await browser.text('/one-person-one-voice')).toContain('Only projects that do good?');
   });
 
   it('keeps the generated docs in step with the Markdown', () => {

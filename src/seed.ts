@@ -38,7 +38,8 @@ const later = (hours: number) => {
 };
 const ctx: Context = {
   sql,
-  config: configFromEnv({ ...process.env, CARETAKERS: 'demo_caretaker', DEMO_RESOURCES: 'true' }),
+  // Example people join and act within minutes of each other, so the waiting time before flagging is off here.
+  config: configFromEnv({ ...process.env, CARETAKERS: 'demo_caretaker', DEMO_RESOURCES: 'true', STANDING_DAYS: '0' }),
   now: () => new Date(clock),
   randomInt,
 };

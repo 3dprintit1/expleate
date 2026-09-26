@@ -16,7 +16,7 @@ import {
 } from '../../services/projects.js';
 import { type ReadResult, recordUse, shareNews, suggestProject } from '../../services/reader.js';
 import { type Project, isHost, requireProject } from '../../services/records.js';
-import { flagProject, reviewsForProject } from '../../services/reviews.js';
+import { flagProject, flagsFrom, reviewsForProject } from '../../services/reviews.js';
 import {
   AmountChoice,
   Csrf,
@@ -798,7 +798,27 @@ const FlagForm: FC<{ c: HonoContext<AppEnv>; project: Project; error?: string | 
 };
 
 projects.get('/projects/:id/flag', signedIn, (c) => {
-  const project = requireProject(c.get('ctx'), c.req.param('id'));
+  const ctx = c.get('ctx');
+  const project = requireProject(ctx, c.req.param('id'));
+  const from = flagsFrom(ctx, c.get('member')!.id);
+  if (from) {
+    return page(
+      c,
+      'Flag a project',
+      <section class="narrow">
+        <a class="back" href={`/projects/${project.id}`}>
+          ← {project.title}
+        </a>
+        <h1>Not just yet</h1>
+        <p class="lead">You can flag projects from {day(ctx.config, from.toISOString())}.</p>
+        <p>
+          New members wait {plural(ctx.config.standingDays, 'day', 'days')} before they can flag a project or be picked for a
+          circle. It stops anyone opening accounts just to pause a project. You can still take back your portion at any
+          time.
+        </p>
+      </section>,
+    );
+  }
   return page(c, 'Flag a project', <FlagForm c={c} project={project} form={{}} />);
 });
 

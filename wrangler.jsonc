@@ -37,6 +37,10 @@
     "CIRCLE_SIZE": "5",
     "FLAG_THRESHOLD": "3",
     "REVIEW_DAYS": "7",
+    // Days of membership before someone can flag a project or sit in a circle.
+    "STANDING_DAYS": "7",
+    // Live projects one person can have at a time.
+    "MAX_LIVE_PROJECTS": "3",
     // The most one monthly running-cost share may take from the pools: 20000 parts per million is 2%.
     "MAX_COST_SHARE_PPM": "20000",
     // The charter reader runs once ANTHROPIC_API_KEY is set as a secret: npx wrangler secret put ANTHROPIC_API_KEY

@@ -17,6 +17,7 @@ import {
   type ProposalInput,
   type ProposalResult,
   checkCanPostUpdate,
+  checkLiveProjects,
   cleanNews,
   cleanProposal,
   postUpdate,
@@ -111,6 +112,7 @@ export async function suggestProject(ctx: Context, memberId: string, input: Prop
   if (input.groupId && !isGroupMember(ctx, input.groupId, memberId)) {
     throw new Problem('You can only suggest projects for groups you are in.', 403, 'groupId');
   }
+  checkLiveProjects(ctx, memberId);
   let reading: Reading | null = null;
   if (ctx.reader) {
     const turn = takeReading(ctx, memberId);

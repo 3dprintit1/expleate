@@ -13,11 +13,14 @@ import {
   READER_ID,
   type Project,
   type ReaderNote,
+  hasStanding,
   hostIds,
   isHost,
   queryProjects,
   readerConcerns,
+  requireMember,
   requireProject,
+  standingFrom,
 } from './records.js';
 
 /** How long people who flagged a project wait before flagging it again, once a circle has found it fits. */
@@ -45,10 +48,10 @@ function requireReview(ctx: Context, id: string): Review {
 }
 
 /**
- * Everyone who could sit in this circle: any person except the project's
- * hosts, people who have had a portion in its pool, people who flagged it,
- * and anyone already seated. The charter reader is not a person, so it is
- * never drawn.
+ * Everyone who could sit in this circle: any person who has been a member
+ * long enough, except the project's hosts, people who have had a portion in
+ * its pool, people who flagged it, and anyone already seated. The charter
+ * reader is not a person, so it is never drawn.
  */
 function eligibleMembers(ctx: Context, reviewId: string, project: Project): string[] {
   const excluded = new Set(hostIds(ctx, project));
@@ -56,8 +59,9 @@ function eligibleMembers(ctx: Context, reviewId: string, project: Project): stri
   add(ctx.sql.all('SELECT member_id FROM portions WHERE project_id = ?', project.id));
   add(ctx.sql.all('SELECT member_id FROM flags WHERE project_id = ? AND settled = 0', project.id));
   add(ctx.sql.all('SELECT member_id FROM seats WHERE review_id = ?', reviewId));
+  const joinedBy = new Date(ctx.now().getTime() - ctx.config.standingDays * 86_400_000).toISOString();
   return ctx.sql
-    .all<{ id: string }>("SELECT id FROM members WHERE kind = 'person' ORDER BY id")
+    .all<{ id: string }>("SELECT id FROM members WHERE kind = 'person' AND created_at <= ? ORDER BY id", joinedBy)
     .map((row) => row.id)
     .filter((id) => !excluded.has(id));
 }
@@ -88,7 +92,8 @@ export function openReview(ctx: Context, project: Project, reason: Review['reaso
 
 /**
  * Circles that could not be drawn because nobody was eligible yet, such as on
- * a brand new site, are drawn as soon as there are people to draw from.
+ * a brand new site, are drawn as soon as there are people to draw from. A
+ * circle drawn late still gets its full time to decide.
  */
 export function drawWaitingCircles(ctx: Context): void {
   const waiting = ctx.sql.all<Review>(
@@ -96,8 +101,22 @@ export function drawWaitingCircles(ctx: Context): void {
       WHERE r.status = 'open' AND NOT EXISTS (SELECT 1 FROM seats s WHERE s.review_id = r.id)`,
   );
   for (const review of waiting) {
-    ctx.sql.transaction(() => drawSeats(ctx, review.id, requireProject(ctx, review.project_id)));
+    ctx.sql.transaction(() => {
+      if (drawSeats(ctx, review.id, requireProject(ctx, review.project_id)) > 0) {
+        ctx.sql.run(
+          'UPDATE reviews SET deadline_at = ? WHERE id = ?',
+          addDays(ctx.now(), ctx.config.reviewDays).toISOString(),
+          review.id,
+        );
+      }
+    });
   }
+}
+
+/** When someone can first flag projects, or null if they already can. */
+export function flagsFrom(ctx: Context, memberId: string): Date | null {
+  const member = requireMember(ctx, memberId);
+  return hasStanding(ctx, member) ? null : standingFrom(ctx, member);
 }
 
 export interface FlagResult {
@@ -163,6 +182,13 @@ export function flagProject(ctx: Context, projectId: string, memberId: string, r
     if (project.status !== 'open') throw new Problem('This project has finished.', 409);
     if (isHost(ctx, project, memberId)) {
       throw new Problem("You host this project, so you can't flag it.", 403);
+    }
+    const from = flagsFrom(ctx, memberId);
+    if (from) {
+      throw new Problem(
+        `You can flag projects once you have been a member for ${ctx.config.standingDays} days, from ${from.toISOString().slice(0, 10)}.`,
+        403,
+      );
     }
     if (hasOpenFlag(ctx, projectId, memberId)) throw new Problem('You have already flagged this project.', 409);
     const again = flagAgainFrom(ctx, projectId, memberId);

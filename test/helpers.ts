@@ -31,7 +31,7 @@ export function testContext(env: Env = {}, seed = 1, reader?: CharterReader): Te
   let now = new Date('2026-10-01T09:00:00Z');
   return {
     sql,
-    config: configFromEnv({ DEMO_RESOURCES: 'true', CURRENCY: 'USD', ...env }),
+    config: configFromEnv({ DEMO_RESOURCES: 'true', CURRENCY: 'USD', STANDING_DAYS: '0', MAX_LIVE_PROJECTS: '100', ...env }),
     now: () => now,
     randomInt: (max) => Math.floor(random() * max),
     reader,

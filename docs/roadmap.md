@@ -12,6 +12,10 @@ This is the big one. Holding other people's money in a pool, and letting them ta
 
 `addResources` and `moveOut` in `src/services/members.ts` are where payments would arrive and leave.
 
+## One person, one voice
+
+Standing and circles drawn at random are in place. Next come vouching between members, then identity checks through the payment partner once money is real, and gatherings in person. [One person, one voice](one-person-one-voice.md) sets out every option and the order to take them in.
+
 ## Changing the charter together
 
 Right now changes to the charter are proposed in the open on the code repository. Members should be able to propose and agree changes on Expleate itself. Charter circles could do this, or a vote of everyone, one person one vote.

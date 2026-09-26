@@ -17,6 +17,8 @@ pages.get('/charter', (c) => page(c, DOCS.charter.title, <article class="doc">{r
 
 pages.get('/pooling', (c) => page(c, DOCS.pooling.title, <article class="doc">{raw(DOCS.pooling.html)}</article>));
 
+pages.get('/one-person-one-voice', (c) => page(c, DOCS.voice.title, <article class="doc">{raw(DOCS.voice.html)}</article>));
+
 pages.get('/reader', (c) => {
   const ctx = c.get('ctx');
   const { config } = ctx;

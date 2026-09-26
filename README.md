@@ -54,7 +54,8 @@ Money is counted exactly, in whole cents, with bigint arithmetic. The tests run 
 ```sh
 npm test        # all tests
 npm run check   # types, for both Node and Cloudflare
-npm run docs    # after editing CHARTER.md or docs/pooling.md, which the site shows
+npm run docs    # after editing CHARTER.md, docs/pooling.md, docs/one-person-one-voice.md
+                # or public/styles.css, which the site uses
 ```
 
 To run the same checks on every push, copy [docs/ci.yml](docs/ci.yml) to `.github/workflows/ci.yml`.

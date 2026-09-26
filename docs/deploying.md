@@ -90,6 +90,8 @@ All in the `vars` section of `wrangler.jsonc`:
 | `FLAG_THRESHOLD` | Different people who must flag a project before a circle is drawn | `3` |
 | `REVIEW_DAYS` | How long a circle has to decide | `7` |
 | `MAX_COST_SHARE_PPM` | Most one running-cost share may take, in parts per million | `20000` (2%) |
+| `STANDING_DAYS` | Days of membership before someone can flag or sit in a circle | `7` |
+| `MAX_LIVE_PROJECTS` | Live projects one person can have at a time | `3` |
 | `READER_MODEL` | The Claude model the charter reader uses | `claude-opus-5` |
 | `READER_DAILY_READS` | Most readings a day, for everyone together | `200` |
 | `READER_READS_PER_PERSON` | Most readings a day for one person's writing | `20` |

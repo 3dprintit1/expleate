@@ -67,6 +67,7 @@ Whoever suggests a project hosts it. When a group suggests one, everyone in the 
 - Hosts share news, so everyone in the pool can see where the project is heading and decide whether to stay in.
 - Pooled resources go to the project itself, never to anyone as pay.
 - Hosts can finish a project at any time, and whatever is left goes back to the people in the pool.
+- One person can have three live projects at a time. Finishing one makes room for the next.
 
 ## When a project might break the charter
 
@@ -75,6 +76,8 @@ Two checks read every project before it opens. A word check looks for words that
 Anyone can flag a project they think breaks the charter. The charter reader also reads every piece of news and every use, and can add one flag of its own. Once three flags are in, from three people or from two people and the reader, the project's pool pauses. The reader's instructions are public, word for word, on [its page](/reader).
 
 Either way, a **charter circle** is drawn: a handful of members picked at random, a bit like a jury. Nobody who hosts the project, has pooled into it or has flagged it can be drawn. Each person in the circle has one vote, and votes are anonymous.
+
+New members wait a week before they can flag a project or be drawn for a circle, so nobody can open accounts just to pause a project or fill a circle. [One person, one voice](docs/one-person-one-voice.md) explains this and what comes next.
 
 A majority of the circle decides. If the circle runs out of time first, the project is only stopped when more of the circle said it breaks the charter than said it fits. If a circle finds that a project breaks the charter, its pool closes and everything left goes back to the people in it.
 

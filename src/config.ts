@@ -30,6 +30,10 @@ export interface Config {
   readonly readerDailyReads: number;
   /** The most readings one person's writing can take up in a day. */
   readonly readerReadsPerPerson: number;
+  /** How long someone must have been a member before they can flag projects or sit in a circle. */
+  readonly standingDays: number;
+  /** How many live projects one person can have suggested at once. */
+  readonly maxLiveProjects: number;
 }
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -69,5 +73,7 @@ export function configFromEnv(env: Env): Config {
     readerModel: env.READER_MODEL?.trim() || 'claude-opus-5',
     readerDailyReads: whole(env.READER_DAILY_READS, 200, 0, 1_000_000),
     readerReadsPerPerson: whole(env.READER_READS_PER_PERSON, 20, 0, 10_000),
+    standingDays: whole(env.STANDING_DAYS, 7, 0, 365),
+    maxLiveProjects: whole(env.MAX_LIVE_PROJECTS, 3, 1, 1000),
   };
 }

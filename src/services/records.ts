@@ -41,6 +41,19 @@ export function getMemberByHandle(ctx: Context, handle: string): Member | undefi
   );
 }
 
+/**
+ * When a member can first flag projects and be drawn for a circle. Waiting a
+ * little stops anyone opening accounts just to pause a project or fill a
+ * circle.
+ */
+export function standingFrom(ctx: Context, member: Pick<Member, 'created_at'>): Date {
+  return new Date(new Date(member.created_at).getTime() + ctx.config.standingDays * 86_400_000);
+}
+
+export function hasStanding(ctx: Context, member: Pick<Member, 'created_at'>): boolean {
+  return standingFrom(ctx, member) <= ctx.now();
+}
+
 export type ProjectStatus = 'awaiting' | 'open' | 'review' | 'completed' | 'stopped' | 'closed' | 'declined';
 
 /** Statuses in which a project still holds a live pool. */

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { castVote, flagProject, openSeatsFor, settleDueReviews } from '../src/services/reviews.js';
+import {
+  castVote,
+  drawWaitingCircles,
+  flagProject,
+  openSeatsFor,
+  reviewsForProject,
+  settleDueReviews,
+} from '../src/services/reviews.js';
 import { contribute, poolLedger, poolPeople, portionFor, takeBack, useResources } from '../src/services/pools.js';
 import { finishProject, listProjects, postUpdate, proposeProject, type ProposalInput } from '../src/services/projects.js';
 import { answerInvite, createGroup, inviteToGroup, leaveGroup } from '../src/services/groups.js';
@@ -390,5 +397,62 @@ describe('accounts', () => {
     expect((await memberForToken(ctx, session.token))?.id).toBe(member.id);
     await signOut(ctx, session.token);
     expect(await memberForToken(ctx, session.token)).toBeUndefined();
+  });
+});
+
+describe('one person, one voice', () => {
+  it('lets people flag projects only once they have been members for a while', () => {
+    const ctx = testContext({ STANDING_DAYS: '7' });
+    const amara = makeMember(ctx, 'amara');
+    const project = openProject(ctx, amara.id);
+    const newcomer = makeMember(ctx, 'newcomer');
+
+    expect(() => flagProject(ctx, project.id, newcomer.id, 'war', 'This looks like it is about the army.')).toThrow(
+      'member for 7 days',
+    );
+    ctx.advanceDays(7);
+    expect(flagProject(ctx, project.id, newcomer.id, 'war', 'This looks like it is about the army.')).toEqual({
+      circleDrawn: false,
+    });
+  });
+
+  it('draws circles only from people who have been members for a while, and gives a late circle its full time', () => {
+    const ctx = testContext({ STANDING_DAYS: '7', REVIEW_DAYS: '7' });
+    const amara = makeMember(ctx, 'amara');
+    for (const handle of ['kenji', 'siobhan', 'mateo', 'priya', 'seun']) makeMember(ctx, handle);
+
+    const result = proposeProject(
+      ctx,
+      amara.id,
+      proposal({ title: 'The Nebula Wars', concernNote: 'It is a made-up film with cardboard spaceships, nothing more.' }),
+    );
+    if (result.kind !== 'created') throw new Error('expected the project to be created');
+    const [review] = reviewsForProject(ctx, result.project.id);
+    expect(ctx.sql.get('SELECT COUNT(*) AS n FROM seats WHERE review_id = ?', review!.id)).toEqual({ n: 0 });
+
+    ctx.advanceDays(6);
+    drawWaitingCircles(ctx);
+    expect(ctx.sql.get('SELECT COUNT(*) AS n FROM seats WHERE review_id = ?', review!.id)).toEqual({ n: 0 });
+
+    ctx.advanceDays(1);
+    drawWaitingCircles(ctx);
+    const seated = ctx.sql.all<{ member_id: string }>('SELECT member_id FROM seats WHERE review_id = ?', review!.id);
+    expect(seated).toHaveLength(5);
+    expect(seated.map((seat) => seat.member_id)).not.toContain(amara.id);
+    // The circle has its full seven days from the moment it was drawn.
+    const deadline = ctx.sql.get<{ deadline_at: string }>('SELECT deadline_at FROM reviews WHERE id = ?', review!.id)!;
+    expect(deadline.deadline_at).toBe(new Date(ctx.now().getTime() + 7 * 86_400_000).toISOString());
+    expect(settleDueReviews(ctx)).toBe(0);
+  });
+
+  it('keeps each person to a few live projects at a time', () => {
+    const ctx = testContext({ MAX_LIVE_PROJECTS: '2' });
+    const amara = makeMember(ctx, 'amara');
+    const first = openProject(ctx, amara.id);
+    openProject(ctx, amara.id, { title: 'A second lantern walk' });
+    expect(() => openProject(ctx, amara.id, { title: 'A third lantern walk' })).toThrow('2 live projects at a time');
+
+    finishProject(ctx, first.id, amara.id, 'stopped', 'We could not find a hall for the workshop.');
+    expect(openProject(ctx, amara.id, { title: 'A third lantern walk' }).status).toBe('open');
   });
 });
