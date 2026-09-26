@@ -103,7 +103,7 @@ describe('the site', () => {
   it('renders the charter and the pooling guide from their Markdown', async () => {
     const browser = new Browser(app);
     expect(await browser.text('/charter')).toContain('No financial gain');
-    expect(await browser.text('/pooling')).toContain('Why the rule is counted this way');
+    expect(await browser.text('/pooling')).toContain('Why not share out by what everyone has put in?');
     expect(await browser.text('/one-person-one-voice')).toContain('Only projects that do good?');
   });
 
@@ -246,6 +246,8 @@ describe('pooling through the site', () => {
     const page = await amara.text(path);
     expect(page).toContain('Two flasks and a camping stove');
     expect(page).toContain('<p class="big">$25</p>');
+    // $10 of the $40 pool was spent, then $5 taken back: $25 left of the $35 still in.
+    expect(page).toContain('so your portion is 71.4% of what you left in.');
 
     await amara.post(`${path}/take-back`, { amount: '500' });
     expect(await amara.text(path)).toContain('That is more than your portion of this pool.');

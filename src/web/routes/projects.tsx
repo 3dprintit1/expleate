@@ -37,7 +37,7 @@ import {
   putInPresets,
 } from '../components.js';
 import type { AppEnv, Form } from '../env.js';
-import { amountField, checked, day, field, fields, money, plural } from '../format.js';
+import { amountField, checked, day, field, fields, money, percent, plural } from '../format.js';
 import { signedIn } from '../guards.js';
 import { flash } from '../session.js';
 
@@ -459,7 +459,8 @@ const PoolCard: FC<{ c: HonoContext<AppEnv>; project: Project }> = ({ c, project
           <p class="faint">
             You put in {money(config, portion.putIn)}
             {portion.takenBack > 0n && ` and took back ${money(config, portion.takenBack)}`}.
-            {shrunk && ' The project has used part of the pool, and every portion shrank by the same share.'}
+            {shrunk &&
+              ` The project has spent some of the pool since you put in. Everyone in the pool carries that by the same percentage, so your portion is ${percent(config, Number(portion!.value) / Number(kept))} of what you left in.`}
           </p>
           {live && portion.value > 0n && (
             <details>

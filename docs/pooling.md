@@ -1,46 +1,54 @@
 # How pooling works
 
-Every project on Expleate has one pool. People put resources in, the project's hosts use resources for the project, and anyone can take their portion back at any time.
+Every project on Expleate has one pool. People put resources in, the project's hosts use them for the project, and anyone can take their portion back at any time.
 
-Two promises hold for everyone in every pool:
+Your portion is your share of what is in the pool now, counting only the spending that happened while your money was in it. Two promises follow from that, for everyone in every pool:
 
 1. **You never take back more than you put in.** Nobody gains from a pool.
-2. **Only the project using resources can shrink your portion, and it shrinks everyone's by the same proportion.** Other people joining or leaving never changes what your portion is worth.
+2. **You share in the spending that happens while your money is in the pool, and only that.** Everyone in the pool at that moment carries it by the same percentage. People joining or leaving never changes what your portion is worth.
 
 ## Some examples
+
+### A hundred people join, then $100 is spent
+
+Two people put in $50 each to start the pool. Then 100 more people put in $50 each, so the pool holds $5,100. The hosts spend $100 on paint. That is 1.96% of the pool, so every portion shrinks by 1.96%, and all 102 people can take back $49.01 or $49.02 each, however early they joined. The exact share is $49.0196, and every cent of the $5,000 is paid out.
+
+### Spending before someone joins
+
+Ten people put in $1,000 each, and the hosts spend $9,000 building a boat. Then Siobhán puts in $1,000 for the last part of the trip. The boat was paid for before Siobhán joined, so it is carried by the ten whose money paid for it: their portions are worth $100 each, and Siobhán's is worth $1,000.
+
+If the hosts then spend $1,000 of the $2,000 left, that is half the pool, and everyone in it shares it: the ten are left with $50 each, and Siobhán with $500.
 
 ### Nothing has been used yet
 
 Amara puts in $100 and Kenji puts in $100. The pool holds $200. Nothing has been used, so each of them can take back their $100 whenever they like, in either order.
 
-### The pool has been used
-
-Amara and Kenji have $100 each in the pool. The hosts use $150 on rope and a tent, which leaves $50. Three quarters of the pool has been used, so three quarters of each portion has gone with it: Amara and Kenji can each take back $25.
-
-### Someone joins after a use
-
-Amara puts in $100. The hosts use $50 of it. Then Kenji puts in $100. Amara's portion is now $50, and Kenji's is $100. None of Kenji's $100 went on something that happened before it arrived.
-
 ### Taking back part of a portion
 
-Amara's portion is worth $80. Amara takes back $30 and leaves $50 in. From then on, that $50 carries later uses in proportion, like everyone else's.
+Amara's portion is worth $80. Amara takes back $30 and leaves $50 in. From then on, that $50 carries later spending in proportion, like everyone else's.
 
 ### The project finishes
 
 The project is done and $300 is left. Amara's portion is worth $100 and Kenji's is worth $200. The pool hands back $100 to Amara and $200 to Kenji, and closes.
 
-## Why the rule is counted this way
+## Why not share out by what everyone has put in?
 
-The idea Expleate started from was this: you can take back up to what you put in, and if there is less in the pot than when you joined, you get the same percentage of what is left as your contribution was of the pot when you put it in.
+It is tempting to share the pool out by what people have put in: your share of the pool is what you put in, divided by everything everyone has put in. When all the spending happens after everyone has joined, that gives exactly the same answers as Expleate, as in the first example above.
 
-For one person on their own that works exactly. Put in $100, the pot halves, and you get $50 back.
+It goes wrong when some of the spending came first. In the boat example, Siobhán's $1,000 would be worth $181.82 the moment it went in, because it would be paying for a boat bought before Siobhán arrived, and each of the ten would gain $81.82 from Siobhán joining. Nobody should lose anything by joining a pool, or gain anything because someone else did.
 
-With more than one person, reading it word for word goes wrong:
+## Why not a percentage fixed when you joined?
 
-- Amara and Kenji each put in $100, and nothing is used. Amara takes $100 back. The pot now holds $100, which is less than the $200 it held when Kenji put money in. Kenji's $100 was 50% of the pot then, so Kenji would get 50% of $100: only $50, although nothing was ever used. The other $50 would be stranded.
-- Amara puts $100 into an empty pot, so Amara's share is 100%. Kenji puts in $100, which is 50%. The project uses $150. If Amara asks first, Amara gets 100% of the $50 left, and Kenji gets nothing. Whoever asks first does best, which is the kind of race Expleate exists to avoid.
+The idea Expleate started from was that you can take back up to what you put in, and if the pot holds less than when you joined, you get the same percentage of what is left as your contribution was of the pot back then.
 
-So Expleate keeps the idea and fixes the counting. Your part of the pool is set when you put something in. People joining or leaving change the size of your part but not what it is worth, because they bring or take their own resources with them. Only uses shrink what it is worth. For someone alone in a pool, this gives exactly the original rule. With other people it stays fair, and it no longer matters who takes back first.
+For one person on their own, that works exactly. With more people, each person's percentage is measured against a different pot, so the percentages do not add up to the whole pot, and the answer depends on who asks first. Take the first example, read word for word:
+
+- If people take back in the order they joined, the first ones get their full $50, the 100th person gets only $12.13, and $1,225 is left in the pot that nobody is owed.
+- If they take back in the opposite order, everyone gets $49.02.
+
+Someone taking their own money back would also count as a loss for everyone who stayed, even when nothing had been spent.
+
+Expleate keeps the two promises from that idea and counts it so the numbers always add up.
 
 ## How it is counted
 

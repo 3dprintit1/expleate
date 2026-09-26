@@ -225,3 +225,67 @@ describe('pooling maths', () => {
     expect(() => sim.take(0, -1n)).toThrow(PoolError);
   });
 });
+
+describe('the examples in docs/pooling.md', () => {
+  const dollars = (n: number) => BigInt(Math.round(n * 100));
+
+  it('a hundred people join, then $100 is spent: all 102 take back $49.01 or $49.02', () => {
+    for (const order of ['first joined first', 'last joined first']) {
+      const sim = new Simulation(102);
+      for (let i = 0; i < 102; i++) sim.put(i, dollars(50));
+      sim.spend(dollars(100));
+      // $5,000 shared by 102 is $49.0196 each, which shows as $49.01 until cents are shared out.
+      for (let i = 0; i < 102; i++) expect(sim.value(i)).toBe(dollars(49.01));
+      const leaving = order === 'first joined first' ? [...Array(102).keys()] : [...Array(102).keys()].reverse();
+      let paid = 0n;
+      for (const i of leaving) {
+        const amount = sim.value(i);
+        expect([dollars(49.01), dollars(49.02)]).toContain(amount);
+        sim.take(i, amount);
+        paid += amount;
+      }
+      // Every cent of the $5,000 is paid out.
+      expect(paid).toBe(dollars(5_000));
+      expect(sim.pool.balance).toBe(0n);
+      sim.checkPromises();
+    }
+  });
+
+  it('spending before someone joins is carried by the people whose money paid for it', () => {
+    const sim = new Simulation(11);
+    for (let i = 0; i < 10; i++) sim.put(i, dollars(1_000));
+    sim.spend(dollars(9_000));
+    sim.put(10, dollars(1_000)); // Siobhán
+    for (let i = 0; i < 10; i++) expect(sim.value(i)).toBe(dollars(100));
+    expect(sim.value(10)).toBe(dollars(1_000));
+
+    // A later use of half the pool is shared by everyone in it.
+    sim.spend(dollars(1_000));
+    for (let i = 0; i < 10; i++) expect(sim.value(i)).toBe(dollars(50));
+    expect(sim.value(10)).toBe(dollars(500));
+    sim.checkPromises();
+  });
+
+  it('nothing used: each takes back what they put in, in either order', () => {
+    for (const first of [0, 1]) {
+      const sim = new Simulation(2);
+      sim.put(0, dollars(100));
+      sim.put(1, dollars(100));
+      sim.take(first, dollars(100));
+      expect(sim.value(1 - first)).toBe(dollars(100));
+    }
+  });
+
+  it('taking back part of a portion leaves the rest carrying later spending', () => {
+    const sim = new Simulation(2);
+    sim.put(0, dollars(100));
+    sim.put(1, dollars(100));
+    sim.spend(dollars(40)); // Each portion is now $80.
+    sim.take(0, dollars(30)); // Amara leaves $50 in.
+    expect(sim.value(0)).toBe(dollars(50));
+    sim.spend(dollars(26)); // A fifth of the $130 left.
+    expect(sim.value(0)).toBe(dollars(40));
+    expect(sim.value(1)).toBe(dollars(64));
+    sim.checkPromises();
+  });
+});
