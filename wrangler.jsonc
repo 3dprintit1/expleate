@@ -25,6 +25,8 @@
 
   // The domain must be added to this Cloudflare account first.
   "routes": [{ "pattern": "expleat.ing", "custom_domain": true }],
+  // No extra addresses for each version: there is one site, at one place.
+  "preview_urls": false,
 
   "vars": {
     "SITE_URL": "https://expleat.ing",
