@@ -31,25 +31,6 @@ Amara's portion is worth $80. Amara takes back $30 and leaves $50 in. From then 
 
 The project is done and $300 is left. Amara's portion is worth $100 and Kenji's is worth $200. The pool hands back $100 to Amara and $200 to Kenji, and closes.
 
-## Why not share out by what everyone has put in?
-
-It is tempting to share the pool out by what people have put in: your share of the pool is what you put in, divided by everything everyone has put in. When all the spending happens after everyone has joined, that gives exactly the same answers as Expleate, as in the first example above.
-
-It goes wrong when some of the spending came first. In the boat example, Siobhán's $1,000 would be worth $181.82 the moment it went in, because it would be paying for a boat bought before Siobhán arrived, and each of the ten would gain $81.82 from Siobhán joining. Nobody should lose anything by joining a pool, or gain anything because someone else did.
-
-## Why not a percentage fixed when you joined?
-
-The idea Expleate started from was that you can take back up to what you put in, and if the pot holds less than when you joined, you get the same percentage of what is left as your contribution was of the pot back then.
-
-For one person on their own, that works exactly. With more people, each person's percentage is measured against a different pot, so the percentages do not add up to the whole pot, and the answer depends on who asks first. Take the first example, read word for word:
-
-- If people take back in the order they joined, the first ones get their full $50, the 100th person gets only $12.13, and $1,225 is left in the pot that nobody is owed.
-- If they take back in the opposite order, everyone gets $49.02.
-
-Someone taking their own money back would also count as a loss for everyone who stayed, even when nothing had been spent.
-
-Expleate keeps the two promises from that idea and counts it so the numbers always add up.
-
 ## How it is counted
 
 Each person in a pool holds a *weight*, and the pool's resources belong to people in proportion to their weight.

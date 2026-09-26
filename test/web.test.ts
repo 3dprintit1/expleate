@@ -103,7 +103,7 @@ describe('the site', () => {
   it('renders the charter and the pooling guide from their Markdown', async () => {
     const browser = new Browser(app);
     expect(await browser.text('/charter')).toContain('No financial gain');
-    expect(await browser.text('/pooling')).toContain('Why not share out by what everyone has put in?');
+    expect(await browser.text('/pooling')).toContain('counting only the spending that happened while your money was in it');
     expect(await browser.text('/one-person-one-voice')).toContain('Only projects that do good?');
   });
 

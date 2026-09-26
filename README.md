@@ -23,7 +23,7 @@ Every example person's password is `pool together`. Sign in as `kenji` to find a
 ## How it works
 
 - **[The charter](CHARTER.md)**: what projects are for, how pooling works, and how charter circles decide.
-- **[How pooling works](docs/pooling.md)**: the rule for taking back, with examples, and why it is counted the way it is.
+- **[How pooling works](docs/pooling.md)**: the rule for taking back, with examples.
 - **The charter reader**: an AI that reads every proposal, piece of news and use against the charter. It can only ask people to take a second look. Its instructions are public at `/reader`, and it is switched off until you give it an Anthropic API key.
 - **[One person, one voice](docs/one-person-one-voice.md)**: how Expleate keeps each person to one voice, what is in place and what comes next.
 - **[Running costs](CHARTER.md#running-costs)**: the founder covers the first $200, then costs are shared across all live pools at exactly what they cost, once a month, and every bill is listed publicly at `/costs`.
