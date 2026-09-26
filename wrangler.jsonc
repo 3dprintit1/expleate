@@ -1,0 +1,42 @@
+// Cloudflare configuration for the public site. See docs/deploying.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "expleate",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+
+  // The stylesheet and icon are served straight from Cloudflare's edge.
+  "assets": { "directory": "./public" },
+
+  // One Durable Object, the Commons, holds the whole ledger in SQLite and
+  // handles one request at a time, which keeps every pool's books exact.
+  "durable_objects": {
+    "bindings": [{ "name": "COMMONS", "class_name": "Commons" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Commons"] }],
+
+  // Once a day: settle charter circles whose time is up, and on the first of
+  // each month share running costs across the pools.
+  "triggers": { "crons": ["17 3 * * *"] },
+
+  // The domain must be added to this Cloudflare account first.
+  "routes": [{ "pattern": "expleat.ing", "custom_domain": true }],
+
+  "vars": {
+    "SITE_URL": "https://expleat.ing",
+    "CURRENCY": "USD",
+    "LOCALE": "en-GB",
+    // Pretend resources while Expleate is a prototype. Set to "false" once real money is connected.
+    "DEMO_RESOURCES": "true",
+    // Handles of the people who pay the bills and record them on /costs. Sign up first, then add yours.
+    "CARETAKERS": "",
+    "CIRCLE_SIZE": "5",
+    "FLAG_THRESHOLD": "3",
+    "REVIEW_DAYS": "7",
+    // The most one monthly running-cost share may take from the pools: 20000 parts per million is 2%.
+    "MAX_COST_SHARE_PPM": "20000"
+  },
+
+  "build": { "command": "npm run docs" },
+  "observability": { "enabled": true }
+}

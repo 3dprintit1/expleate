@@ -1,0 +1,35 @@
+{
+  "name": "expleate",
+  "version": "0.1.0",
+  "description": "Pool resources with anyone in the world, for projects of creativity, adventure and joy.",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "npm run docs && tsx watch src/node.ts",
+    "start": "node dist/node.js",
+    "build": "npm run docs && tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json && wrangler types >/dev/null && tsc -p tsconfig.worker.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "tsx src/seed.ts",
+    "docs": "tsx scripts/build-docs.ts",
+    "deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "marked": "^18.0.14",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.141.0"
+  }
+}
